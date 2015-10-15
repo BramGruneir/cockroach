@@ -57,11 +57,12 @@ type Cluster struct {
 	epoch           int
 	epochWriter     *tabwriter.Writer
 	actionWriter    *tabwriter.Writer
+	script          *Script
 }
 
 // createCluster generates a new cluster using the provided stopper and the
 // number of nodes supplied. Each node will have one store to start.
-func createCluster(stopper *stop.Stopper, nodeCount int, epochWriter, actionWriter io.Writer) *Cluster {
+func createCluster(stopper *stop.Stopper, nodeCount int, epochWriter, actionWriter io.Writer, script *Script) *Cluster {
 	rand, seed := randutil.NewPseudoRand()
 	clock := hlc.NewClock(hlc.UnixNano)
 	rpcContext := rpc.NewContext(&base.Context{}, clock, stopper)
@@ -85,7 +86,8 @@ func createCluster(stopper *stop.Stopper, nodeCount int, epochWriter, actionWrit
 		rand:            rand,
 		seed:            seed,
 		epochWriter:     tabwriter.NewWriter(epochWriter, 8, 1, 2, ' ', 0),
-		actionWriter:    tabwriter.NewWriter(actionWriter, 12, 1, 2, ' ', 0),
+		actionWriter:    tabwriter.NewWriter(actionWriter, 8, 1, 2, ' ', 0),
+		script:          script,
 	}
 
 	// Add the nodes.
@@ -110,6 +112,7 @@ func createCluster(stopper *stop.Stopper, nodeCount int, epochWriter, actionWrit
 func (c *Cluster) addNewNodeWithStore() {
 	nodeID := roachpb.NodeID(len(c.nodes))
 	c.nodes[nodeID] = newNode(nodeID, c.gossip)
+	fmt.Fprintf(c.actionWriter, "%d:\tNode %d added\n", c.epoch, nodeID)
 	c.addStore(nodeID, false)
 }
 
@@ -124,6 +127,7 @@ func (c *Cluster) addStore(nodeID roachpb.NodeID, output bool) *Store {
 	c.storeIDs = append(c.storeIDs, s.desc.StoreID)
 	sort.Sort(c.storeIDs)
 
+	fmt.Fprintf(c.actionWriter, "%d:\tStore %d added on Node %d\n", c.epoch, s.desc.StoreID, nodeID)
 	if output {
 		c.OutputEpochHeader()
 	}
@@ -151,16 +155,11 @@ func (c *Cluster) splitRangeRandom() {
 	c.splitRange(rangeID)
 }
 
-// splitRangeLast splits the last added range in the cluster.
-func (c *Cluster) splitRangeLast() {
-	rangeID := roachpb.RangeID(len(c.ranges) - 1)
-	c.splitRange(rangeID)
-}
-
 // splitRange "splits" a range. This split creates a new range with new
 // replicas on the same stores as the passed in range. The new range has the
 // same zone config as the original range.
 func (c *Cluster) splitRange(rangeID roachpb.RangeID) {
+	fmt.Fprintf(c.actionWriter, "%d:\tRange %d split\n", c.epoch, rangeID)
 	newRange := c.addRange()
 	originalRange := c.ranges[rangeID]
 	newRange.splitRange(originalRange)
@@ -169,14 +168,19 @@ func (c *Cluster) splitRange(rangeID roachpb.RangeID) {
 // runEpoch steps through a single instance of the simulator. Returns true if no
 // actions were performed during this epoch.
 // Each epoch performs the following steps:
-// 1) The status of every store is gossiped so the store pool is up to date.
-// 2) Each replica on every range calls the allocator to determine if there are
+// 1) Perform all scripted actions.
+// 2) The status of every store is gossiped so the store pool is up to date.
+// 3) Each replica on every range calls the allocator to determine if there are
 //    any actions required.
-// 3) The replica on each range with the highest priority executes it's action.
-// 4) The rangesByStore map is recalculated.
-// 5) The current status of the cluster is output.
+// 4) The replica on each range with the highest priority executes it's action.
+// 5) The rangesByStore map is recalculated.
+// 6) The current status of the cluster is output.
+// 7) Flush the outputs.
 func (c *Cluster) runEpoch() bool {
 	c.epoch++
+
+	// Perform all the requested scripted actions.
+	completed := c.executeScriptedActions()
 
 	// Gossip all the store updates.
 	c.gossipStores()
@@ -187,7 +191,8 @@ func (c *Cluster) runEpoch() bool {
 	c.prepareActions()
 
 	// Execute the determined operations.
-	stable := c.performActions()
+	// TODO(bram): Add ability to end when stable.
+	c.performActions()
 
 	// Recalculate the ranges IDs by store map.
 	c.calculateRangeIDsByStore()
@@ -195,7 +200,49 @@ func (c *Cluster) runEpoch() bool {
 	// Output the update.
 	c.OutputEpoch()
 
-	return stable
+	// Flush the output.
+	c.flush()
+
+	return completed
+}
+
+// executeScriptedActions performs all scripted actions to the cluster and
+// return true if the simulation is complete.
+func (c *Cluster) executeScriptedActions() bool {
+	var exitcode bool
+	actions := c.script.getActions(c.epoch)
+	for _, action := range actions {
+		switch action.operation {
+		case (OpExit):
+			{
+				fmt.Fprintf(c.actionWriter, "%d:\tAction:Exit - this will be the last epoch.\n", c.epoch)
+				exitcode = true
+			}
+		case (OpSplitRange):
+			{
+				switch action.value {
+				case (OpValSet):
+					fmt.Fprintf(c.actionWriter, "%d:\tAction:SplitRange - splitting the range %d.\n", c.epoch, action.valueNumber)
+					c.splitRange(roachpb.RangeID(action.valueNumber))
+				case (OpValRandom):
+					fmt.Fprintf(c.actionWriter, "%d:\tAction:SplitRange - splitting a random range.\n", c.epoch)
+					c.splitRangeRandom()
+				case (OpValFirst):
+					fmt.Fprintf(c.actionWriter, "%d:\tAction:SplitRange - splitting the first range.\n", c.epoch)
+					c.splitRange(c.rangeIDs[0])
+				case (OpValLast):
+					fmt.Fprintf(c.actionWriter, "%d:\tAction:SplitRange - splitting the last range.\n", c.epoch)
+					c.splitRange(c.rangeIDs[len(c.rangeIDs)-1])
+				}
+			}
+		case (OpAddNode):
+			{
+				fmt.Fprintf(c.actionWriter, "%d:\tAction:AddNode - Adding a new node with a new store.\n", c.epoch)
+				c.addNewNodeWithStore()
+			}
+		}
+	}
+	return exitcode
 }
 
 // gossipStores gossips all the most recent status for all stores.
@@ -306,8 +353,6 @@ func (c *Cluster) performActions() bool {
 				if topReplica.rebalance {
 					rebalanceStoreID, found := r.getRebalanceTarget()
 					if !found {
-						fmt.Fprintf(c.actionWriter, "%d:\tStore:%d\tRange:%d\tREBALANCE:no target\n",
-							c.epoch, storeID, topRangeID)
 						continue
 					}
 					stable = false

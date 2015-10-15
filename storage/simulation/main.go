@@ -30,35 +30,49 @@ func main() {
 
 	fmt.Printf("A simulation of the cluster's rebalancing.\n\n")
 
+	s := newScript(1000)
+	s.addAction(ActionDetails{
+		Action: Action{operation: OpExit},
+		first:  600,
+	})
+	s.addAction(ActionDetails{
+		Action: Action{
+			operation: OpSplitRange,
+			value:     OpValRandom,
+		},
+		first:  0,
+		last:   100,
+		every:  10,
+		repeat: 2,
+	})
+	s.addAction(ActionDetails{
+		Action: Action{
+			operation: OpSplitRange,
+			value:     OpValLast,
+		},
+		first: 150,
+		last:  500,
+		every: 5,
+	})
+	s.addAction(ActionDetails{
+		Action: Action{operation: OpAddNode},
+		first:  100,
+	})
+	s.addAction(ActionDetails{
+		Action: Action{operation: OpAddNode},
+		first:  500,
+		repeat: 2,
+	})
+
 	// TODO(bram): Setup flags to allow filenames for these outputs. Print both
 	// to action and epoch to os.Stdout as well.
 	epochWriter := os.Stdout
 	actionWriter := os.Stdout
-	c := createCluster(stopper, 5, epochWriter, actionWriter)
-
-	// Split a random range 100 times.
-	for i := 0; i < 10; i++ {
-		c.splitRangeRandom()
-	}
-	c.flush()
+	c := createCluster(stopper, 3, epochWriter, actionWriter, s)
 
 	// TODO(bram): only flush when on manual stepping (once that enabled).
 	// Run until stable or at the 100th epoch.
-	for c.runEpoch() != true && c.epoch < 100 {
-		c.flush()
+	for c.runEpoch() != true {
 	}
-	c.flush()
-	fmt.Println(c)
-
-	for i := 0; i < 70; i++ {
-		c.splitRangeLast()
-	}
-
-	// Run until stable or at the 1000th epoch.
-	for c.runEpoch() != true && c.epoch < 1000 {
-		c.flush()
-	}
-	c.flush()
-
 	fmt.Println(c)
 }
