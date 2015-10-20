@@ -88,6 +88,7 @@ func createCluster(stopper *stop.Stopper, nodeCount int, epochWriter, actionWrit
 		epochWriter:     tabwriter.NewWriter(epochWriter, 8, 1, 2, ' ', 0),
 		actionWriter:    tabwriter.NewWriter(actionWriter, 8, 1, 2, ' ', 0),
 		script:          script,
+		epoch:           -1,
 	}
 
 	// Add the nodes.
@@ -102,8 +103,10 @@ func createCluster(stopper *stop.Stopper, nodeCount int, epochWriter, actionWrit
 	c.calculateRangeIDsByStore()
 
 	// Output the first epoch header.
+	c.epoch = 0
 	c.OutputEpochHeader()
 	c.OutputEpoch()
+	c.flush()
 
 	return c
 }
@@ -112,8 +115,11 @@ func createCluster(stopper *stop.Stopper, nodeCount int, epochWriter, actionWrit
 func (c *Cluster) addNewNodeWithStore() {
 	nodeID := roachpb.NodeID(len(c.nodes))
 	c.nodes[nodeID] = newNode(nodeID, c.gossip)
-	fmt.Fprintf(c.actionWriter, "%d:\tNode %d added\n", c.epoch, nodeID)
-	c.addStore(nodeID, false)
+	// Only output if we're running the simulation.
+	if c.epoch >= 0 {
+		fmt.Fprintf(c.actionWriter, "%d:\tNode %d added\n", c.epoch, nodeID)
+	}
+	c.addStore(nodeID, true)
 }
 
 // addStore adds a new store to the node with the provided nodeID.
@@ -127,9 +133,12 @@ func (c *Cluster) addStore(nodeID roachpb.NodeID, output bool) *Store {
 	c.storeIDs = append(c.storeIDs, s.desc.StoreID)
 	sort.Sort(c.storeIDs)
 
-	fmt.Fprintf(c.actionWriter, "%d:\tStore %d added on Node %d\n", c.epoch, s.desc.StoreID, nodeID)
-	if output {
-		c.OutputEpochHeader()
+	// Only output if we're running the simulation and output is requested.
+	if c.epoch >= 0 {
+		fmt.Fprintf(c.actionWriter, "%d:\tStore %d added on Node %d\n", c.epoch, s.desc.StoreID, nodeID)
+		if output {
+			c.OutputEpochHeader()
+		}
 	}
 	return s
 }

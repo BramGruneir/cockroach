@@ -18,19 +18,55 @@
 package main
 
 import (
+	"flag"
 	"fmt"
+	"io"
 	"os"
+	"path/filepath"
 
+	"github.com/cockroachdb/cockroach/util/log"
 	"github.com/cockroachdb/cockroach/util/stop"
 )
+
+var maxEpoch = flag.Int("maxEpoch", 10000, "Maximum epoch to simulate.")
+var actionOutputFile = flag.String("action", "", "Output file that shows all actions taken in cluster.")
+var epochOutputFile = flag.String("epoch", "", "Output file that shows stats for all epochs.")
+var startingNodes = flag.Int("startingNodes", 3, "Number of initial nodes in the cluster.")
+
+//Bram(TODO): Implement script parsing.
+//var scriptInputFile = flag.String("script", "default.script", "Input script file to describe simulated actions.")
 
 func main() {
 	stopper := stop.NewStopper()
 	defer stopper.Stop()
 
-	fmt.Printf("A simulation of the cluster's rebalancing.\n\n")
+	flag.Parse()
+	// Give the flags some boundaries.
+	if *startingNodes < 0 {
+		*startingNodes = 0
+	}
+	if *maxEpoch < 0 {
+		*maxEpoch = 0
+	}
 
-	s := newScript(1000)
+	// Clean the output file strings so they can be compared easily or set them
+	// to nil if there is no file.
+	if len(*actionOutputFile) > 0 {
+		*actionOutputFile = filepath.Clean(*actionOutputFile)
+	} else {
+		actionOutputFile = nil
+	}
+	if len(*epochOutputFile) > 0 {
+		*epochOutputFile = filepath.Clean(*epochOutputFile)
+	} else {
+		epochOutputFile = nil
+	}
+
+	fmt.Printf("A simulation of the cluster's rebalancing.\n\n")
+	fmt.Printf("Maximum Epoch for simulation set to %d.\n", *maxEpoch)
+	fmt.Printf("Cluster is starting with %d nodes.\n", *startingNodes)
+
+	s := newScript(*maxEpoch)
 	s.addAction(ActionDetails{
 		Action: Action{operation: OpExit},
 		first:  600,
@@ -64,13 +100,45 @@ func main() {
 		repeat: 2,
 	})
 
-	// TODO(bram): Setup flags to allow filenames for these outputs. Print both
-	// to action and epoch to os.Stdout as well.
-	epochWriter := os.Stdout
-	actionWriter := os.Stdout
-	c := createCluster(stopper, 3, epochWriter, actionWriter, s)
+	epochWriter := io.MultiWriter(os.Stdout)
+	actionWriter := io.MultiWriter(os.Stdout)
 
-	// TODO(bram): only flush when on manual stepping (once that enabled).
+	// Do we have an action output file?
+	if actionOutputFile != nil && len(*actionOutputFile) > 0 {
+		actionOutputF, err := os.OpenFile(*actionOutputFile, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0666)
+		if err != nil {
+			log.Fatalf("Could not create or open action file:%s - %s", *actionOutputFile, err)
+		}
+		defer actionOutputF.Close()
+		fmt.Printf("Action Output will be written to %s.\n", *actionOutputFile)
+		actionWriter = io.MultiWriter(os.Stdout, actionOutputF)
+	} else {
+		fmt.Printf("Action Output will only be written to console.\n")
+	}
+
+	// Do we have an epoch output file?
+	if epochOutputFile != nil && len(*epochOutputFile) > 0 {
+		// Is it the same as the action output file?
+		if actionOutputFile != nil && *actionOutputFile == *epochOutputFile {
+			epochWriter = actionWriter
+			fmt.Printf("Epoch Output will also be written to %s.\n", *epochOutputFile)
+		} else {
+			epochOutputF, err := os.OpenFile(*epochOutputFile, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0666)
+			if err != nil {
+				log.Fatalf("Could not create or open epoch file:%s - %s", *epochOutputFile, err)
+			}
+			defer epochOutputF.Close()
+			fmt.Printf("Epoch Output will be written to %s.\n", *epochOutputFile)
+			epochWriter = io.MultiWriter(os.Stdout, epochOutputF)
+		}
+	} else {
+		fmt.Printf("Epoch Output will only be written to console.\n")
+	}
+
+	fmt.Printf("\n\n")
+
+	c := createCluster(stopper, *startingNodes, epochWriter, actionWriter, s)
+
 	// Run until stable or at the 100th epoch.
 	for c.runEpoch() != true {
 	}
