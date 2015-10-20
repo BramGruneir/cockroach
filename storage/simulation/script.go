@@ -17,6 +17,18 @@
 
 package main
 
+import (
+	"bufio"
+	"bytes"
+	"fmt"
+	"os"
+	"strconv"
+	"strings"
+	"text/tabwriter"
+
+	"github.com/cockroachdb/cockroach/util"
+)
+
 // Operation enumerates the possible scripted operations that can occur to a
 // cluster.
 type Operation int
@@ -26,6 +38,7 @@ const (
 	OpSplitRange Operation = iota
 	OpAddNode
 	OpExit
+	// TODO(brma): add optoinal value to addnode to indicated size
 	// TODO(bram): consider many other operations here.
 	//	OpMergeRangeRandom
 	//	OpMergeRangeFirst
@@ -46,6 +59,17 @@ var operations = [...]string{
 // String returns the string version of the Operation enumerable.
 func (operation Operation) String() string {
 	return operations[operation]
+}
+
+// operationFromString returns the operation corresponding with the passed in
+// string.
+func operationFromString(s string) (Operation, bool) {
+	for i, op := range operations {
+		if op == s {
+			return Operation(i), true
+		}
+	}
+	return 0, false
 }
 
 // OperationValue enumerates the possible values for a scripted operation.
@@ -71,6 +95,19 @@ func (operationValue OperationValue) String() string {
 	return operationValues[operationValue]
 }
 
+// operationValueFromString returns the operation corresponding with the passed
+// in string. If the value is opValSet, then the value is parsed into the
+// returned int.
+func operationValueFromString(s string) (OperationValue, int, error) {
+	for i, opVal := range operationValues {
+		if opVal == s {
+			return OperationValue(i), 0, nil
+		}
+	}
+	valueNumber, err := strconv.Atoi(s)
+	return OpValSet, int(valueNumber), err
+}
+
 // Action is a single scripted action.
 type Action struct {
 	operation   Operation
@@ -92,6 +129,37 @@ type ActionDetails struct {
 	repeat int
 }
 
+func (ad ActionDetails) String() string {
+	var buf bytes.Buffer
+	fmt.Fprintf(&buf, "Operation:%s", operations[ad.Action.operation])
+
+	if ad.Action.value == OpValSet {
+		if ad.Action.valueNumber > 0 {
+			fmt.Fprintf(&buf, "\tValue:%d", ad.Action.valueNumber)
+		} else {
+			fmt.Fprintf(&buf, "\t ")
+		}
+	} else {
+		fmt.Fprintf(&buf, "\tValue:%s", operations[ad.Action.operation])
+	}
+
+	fmt.Fprintf(&buf, "\tFirst:%d", ad.first)
+	if ad.last > 0 {
+		fmt.Fprintf(&buf, "\tLast:%d", ad.last)
+	} else {
+		fmt.Fprintf(&buf, "\t")
+	}
+	if ad.every > 0 {
+		fmt.Fprintf(&buf, "\tEvery:%d", ad.every)
+	} else {
+		fmt.Fprintf(&buf, "\t")
+	}
+	if ad.repeat > 1 {
+		fmt.Fprintf(&buf, "\tRepeat:%d", ad.repeat)
+	}
+	return buf.String()
+}
+
 // Script contains a list of all the scripted actions for cluster simulation.
 type Script struct {
 	maxEpoch int
@@ -100,11 +168,13 @@ type Script struct {
 
 // newScript creates a new Script.
 // TODO(bram): Add parsing logic.
-func newScript(maxEpoch int) *Script {
-	return &Script{
+func newScript(maxEpoch int, scriptFile string) (*Script, error) {
+	s := &Script{
 		maxEpoch: maxEpoch,
 		actions:  make(map[int][]Action),
 	}
+
+	return s, s.parse(scriptFile)
 }
 
 // addActionAtEpoch adds an action at a specific epoch to the s.actions map.
@@ -148,4 +218,93 @@ func (s *Script) getActions(epoch int) []Action {
 		return []Action{{operation: OpExit}}
 	}
 	return s.actions[epoch]
+}
+
+// parse loads all the operations from a script file into the actions map. The
+// format is described in the default.script file.
+func (s *Script) parse(scriptFile string) error {
+	file, err := os.Open(scriptFile)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	tw := tabwriter.NewWriter(os.Stdout, 12, 4, 2, ' ', 0)
+
+	scanner := bufio.NewScanner(file)
+	lineNumber := 0
+	for scanner.Scan() {
+		lineNumber++
+		line := scanner.Text()
+		line = strings.ToLower(line)
+		line = strings.TrimSpace(line)
+
+		// Ignore empty and commented out lines.
+		if len(line) == 0 || strings.HasPrefix(line, "#") {
+			continue
+		}
+
+		// Split the line by space.
+		elements := strings.Split(line, " ")
+		if len(elements) < 2 {
+			return util.Errorf("line %d has too few elements: %s", lineNumber, line)
+		}
+		if len(elements) > 5 {
+			return util.Errorf("line %d has too many elements: %s", lineNumber, line)
+		}
+
+		// Split the operation into operation-value.
+		subElements := strings.Split(elements[0], "-")
+		if len(subElements) > 2 {
+			return util.Errorf("line %d operation has more than one value: %s", lineNumber, elements[0])
+		}
+		op, found := operationFromString(subElements[0])
+		if !found {
+			return util.Errorf("line %d operation could not be found: %s", lineNumber, subElements[0])
+		}
+
+		details := ActionDetails{Action: Action{operation: op}}
+		// Do we have a value/number?
+		if len(subElements) == 2 {
+			if details.Action.value, details.Action.valueNumber, err = operationValueFromString(subElements[1]); err != nil {
+				return util.Errorf("line %d operation value could not be found or parsed: %s",
+					lineNumber, subElements[1])
+			}
+		}
+
+		// Get the first epoch.
+		if details.first, err = strconv.Atoi(elements[1]); err != nil {
+			return util.Errorf("line %d FIRST could not be parsed: %s", lineNumber, elements[1])
+		}
+
+		// Get the last epoch.
+		if len(elements) > 2 {
+			if details.last, err = strconv.Atoi(elements[2]); err != nil {
+				return util.Errorf("line %d LAST could not be parsed: %s", lineNumber, elements[2])
+			}
+		}
+
+		// Get the every value.
+		if len(elements) > 3 {
+			if details.every, err = strconv.Atoi(elements[3]); err != nil {
+				return util.Errorf("line %d EVERY could not be parsed: %s", lineNumber, elements[3])
+			}
+		}
+
+		// Get the repeat value.
+		if len(elements) > 4 {
+			if details.repeat, err = strconv.Atoi(elements[4]); err != nil {
+				return util.Errorf("line %d REPEAT could not be parsed: %s", lineNumber, elements[4])
+			}
+		}
+
+		s.addAction(details)
+		fmt.Fprintf(tw, "%d:\t%s\n", lineNumber, details)
+	}
+	if err := scanner.Err(); err != nil {
+		return err
+	}
+	_ = tw.Flush()
+
+	return nil
 }

@@ -32,9 +32,7 @@ var maxEpoch = flag.Int("maxEpoch", 10000, "Maximum epoch to simulate.")
 var actionOutputFile = flag.String("action", "", "Output file that shows all actions taken in cluster.")
 var epochOutputFile = flag.String("epoch", "", "Output file that shows stats for all epochs.")
 var startingNodes = flag.Int("startingNodes", 3, "Number of initial nodes in the cluster.")
-
-//Bram(TODO): Implement script parsing.
-//var scriptInputFile = flag.String("script", "default.script", "Input script file to describe simulated actions.")
+var scriptInputFile = flag.String("script", "default.script", "Input script file to describe simulated actions.")
 
 func main() {
 	stopper := stop.NewStopper()
@@ -61,44 +59,12 @@ func main() {
 	} else {
 		epochOutputFile = nil
 	}
+	*scriptInputFile = filepath.Clean(*scriptInputFile)
 
 	fmt.Printf("A simulation of the cluster's rebalancing.\n\n")
 	fmt.Printf("Maximum Epoch for simulation set to %d.\n", *maxEpoch)
 	fmt.Printf("Cluster is starting with %d nodes.\n", *startingNodes)
-
-	s := newScript(*maxEpoch)
-	s.addAction(ActionDetails{
-		Action: Action{operation: OpExit},
-		first:  600,
-	})
-	s.addAction(ActionDetails{
-		Action: Action{
-			operation: OpSplitRange,
-			value:     OpValRandom,
-		},
-		first:  0,
-		last:   100,
-		every:  10,
-		repeat: 2,
-	})
-	s.addAction(ActionDetails{
-		Action: Action{
-			operation: OpSplitRange,
-			value:     OpValLast,
-		},
-		first: 150,
-		last:  500,
-		every: 5,
-	})
-	s.addAction(ActionDetails{
-		Action: Action{operation: OpAddNode},
-		first:  100,
-	})
-	s.addAction(ActionDetails{
-		Action: Action{operation: OpAddNode},
-		first:  500,
-		repeat: 2,
-	})
+	fmt.Printf("Script file is %s\n", *scriptInputFile)
 
 	epochWriter := io.MultiWriter(os.Stdout)
 	actionWriter := io.MultiWriter(os.Stdout)
@@ -108,6 +74,7 @@ func main() {
 		actionOutputF, err := os.OpenFile(*actionOutputFile, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0666)
 		if err != nil {
 			log.Fatalf("Could not create or open action file:%s - %s", *actionOutputFile, err)
+			return
 		}
 		defer actionOutputF.Close()
 		fmt.Printf("Action Output will be written to %s.\n", *actionOutputFile)
@@ -126,6 +93,7 @@ func main() {
 			epochOutputF, err := os.OpenFile(*epochOutputFile, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0666)
 			if err != nil {
 				log.Fatalf("Could not create or open epoch file:%s - %s", *epochOutputFile, err)
+				return
 			}
 			defer epochOutputF.Close()
 			fmt.Printf("Epoch Output will be written to %s.\n", *epochOutputFile)
@@ -135,11 +103,20 @@ func main() {
 		fmt.Printf("Epoch Output will only be written to console.\n")
 	}
 
-	fmt.Printf("\n\n")
+	fmt.Printf("\nParsing Script:\n")
+	s, err := newScript(*maxEpoch, *scriptInputFile)
+	if err != nil {
+		log.Fatalf("Could not correctly parse script file:%s - %s", *scriptInputFile, err)
+		return
+	}
 
+	fmt.Printf("\nPreparing Cluster:\n")
 	c := createCluster(stopper, *startingNodes, epochWriter, actionWriter, s)
 
 	// Run until stable or at the 100th epoch.
+	fmt.Printf("\nRunning Simulation:\n")
+	c.OutputEpochHeader()
+	c.flush()
 	for c.runEpoch() != true {
 	}
 	fmt.Println(c)

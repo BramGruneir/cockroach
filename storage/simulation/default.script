@@ -1,0 +1,12 @@
+# operation[-value] first last every repeat
+# not all operations require a value
+# default value for last is 0
+# default value for every is 0
+# default value for repeat is 1
+# blank lines and lines starting with # are ignored
+
+splitrange-random 0 100 10 2
+addnode 100
+splitrange-last 150 500 5
+addnode 500 0 0 2
+exit 600
