@@ -57,12 +57,12 @@ type Cluster struct {
 	epoch           int
 	epochWriter     *tabwriter.Writer
 	actionWriter    *tabwriter.Writer
-	script          *Script
+	script          Script
 }
 
 // createCluster generates a new cluster using the provided stopper and the
 // number of nodes supplied. Each node will have one store to start.
-func createCluster(stopper *stop.Stopper, nodeCount int, epochWriter, actionWriter io.Writer, script *Script) *Cluster {
+func createCluster(stopper *stop.Stopper, nodeCount int, epochWriter, actionWriter io.Writer, script Script) *Cluster {
 	rand, seed := randutil.NewPseudoRand()
 	clock := hlc.NewClock(hlc.UnixNano)
 	rpcContext := rpc.NewContext(&base.Context{}, clock, stopper)
@@ -119,11 +119,11 @@ func (c *Cluster) addNewNodeWithStore() {
 	if c.epoch >= 0 {
 		fmt.Fprintf(c.actionWriter, "%d:\tNode %d added\n", c.epoch, nodeID)
 	}
-	c.addStore(nodeID, true)
+	c.addStore(nodeID)
 }
 
 // addStore adds a new store to the node with the provided nodeID.
-func (c *Cluster) addStore(nodeID roachpb.NodeID, output bool) *Store {
+func (c *Cluster) addStore(nodeID roachpb.NodeID) *Store {
 	n := c.nodes[nodeID]
 	s := n.addNewStore()
 	c.stores[s.desc.StoreID] = s
@@ -133,12 +133,10 @@ func (c *Cluster) addStore(nodeID roachpb.NodeID, output bool) *Store {
 	c.storeIDs = append(c.storeIDs, s.desc.StoreID)
 	sort.Sort(c.storeIDs)
 
-	// Only output if we're running the simulation and output is requested.
+	// Only output if we're running the simulation.
 	if c.epoch >= 0 {
 		fmt.Fprintf(c.actionWriter, "%d:\tStore %d added on Node %d\n", c.epoch, s.desc.StoreID, nodeID)
-		if output {
-			c.OutputEpochHeader()
-		}
+		c.OutputEpochHeader()
 	}
 	return s
 }
@@ -174,22 +172,22 @@ func (c *Cluster) splitRange(rangeID roachpb.RangeID) {
 	newRange.splitRange(originalRange)
 }
 
-// runEpoch steps through a single instance of the simulator. Returns true if no
-// actions were performed during this epoch.
-// Each epoch performs the following steps:
-// 1) Perform all scripted actions.
+// runEpoch steps through a single instance of the simulator. Returns true if
+// the last epoch has occurred.
+// During every epoch the following steps occur:
+// 1) All scripted cluster actions are executed.
 // 2) The status of every store is gossiped so the store pool is up to date.
-// 3) Each replica on every range calls the allocator to determine if there are
-//    any actions required.
-// 4) The replica on each range with the highest priority executes it's action.
+// 3) All replicas call the allocator to determine if there are any possible
+//    actions for it to perform.
+// 4) The replica on each range with the highest priority executes its action.
 // 5) The rangesByStore map is recalculated.
 // 6) The current status of the cluster is output.
-// 7) Flush the outputs.
+// 7) The outputs are flushed.
 func (c *Cluster) runEpoch() bool {
 	c.epoch++
 
 	// Perform all the requested scripted actions.
-	completed := c.executeScriptedActions()
+	lastEpoch := c.executeScriptedActions()
 
 	// Gossip all the store updates.
 	c.gossipStores()
@@ -212,34 +210,34 @@ func (c *Cluster) runEpoch() bool {
 	// Flush the output.
 	c.flush()
 
-	return completed
+	return lastEpoch
 }
 
 // executeScriptedActions performs all scripted actions to the cluster and
-// return true if the simulation is complete.
+// return true if the exit action is encountered.
 func (c *Cluster) executeScriptedActions() bool {
-	var exitcode bool
+	var lastEpoch bool
 	actions := c.script.getActions(c.epoch)
 	for _, action := range actions {
 		switch action.operation {
 		case (OpExit):
 			{
 				fmt.Fprintf(c.actionWriter, "%d:\tAction:Exit - this will be the last epoch.\n", c.epoch)
-				exitcode = true
+				lastEpoch = true
 			}
 		case (OpSplitRange):
 			{
-				switch action.value {
-				case (OpValSet):
-					fmt.Fprintf(c.actionWriter, "%d:\tAction:SplitRange - splitting the range %d.\n", c.epoch, action.valueNumber)
-					c.splitRange(roachpb.RangeID(action.valueNumber))
-				case (OpValRandom):
+				switch action.option {
+				case (OpOpSet):
+					fmt.Fprintf(c.actionWriter, "%d:\tAction:SplitRange - splitting the range %d.\n", c.epoch, action.value)
+					c.splitRange(roachpb.RangeID(action.value))
+				case (OpOpRandom):
 					fmt.Fprintf(c.actionWriter, "%d:\tAction:SplitRange - splitting a random range.\n", c.epoch)
 					c.splitRangeRandom()
-				case (OpValFirst):
+				case (OpOpFirst):
 					fmt.Fprintf(c.actionWriter, "%d:\tAction:SplitRange - splitting the first range.\n", c.epoch)
 					c.splitRange(c.rangeIDs[0])
-				case (OpValLast):
+				case (OpOpLast):
 					fmt.Fprintf(c.actionWriter, "%d:\tAction:SplitRange - splitting the last range.\n", c.epoch)
 					c.splitRange(c.rangeIDs[len(c.rangeIDs)-1])
 				}
@@ -251,7 +249,7 @@ func (c *Cluster) executeScriptedActions() bool {
 			}
 		}
 	}
-	return exitcode
+	return lastEpoch
 }
 
 // gossipStores gossips all the most recent status for all stores.

@@ -72,47 +72,47 @@ func operationFromString(s string) (Operation, bool) {
 	return 0, false
 }
 
-// OperationValue enumerates the possible values for a scripted operation.
-type OperationValue int
+// OperationOption enumerates the possible options for a scripted operation.
+type OperationOption int
 
-// These are the possible operations values.
+// These are the possible operations options.
 const (
-	OpValSet OperationValue = iota
-	OpValRandom
-	OpValFirst
-	OpValLast
+	OpOpSet OperationOption = iota
+	OpOpRandom
+	OpOpFirst
+	OpOpLast
 )
 
-var operationValues = [...]string{
-	OpValSet:    "",
-	OpValRandom: "random",
-	OpValFirst:  "first",
-	OpValLast:   "last",
+var operationOptions = [...]string{
+	OpOpSet:    "",
+	OpOpRandom: "random",
+	OpOpFirst:  "first",
+	OpOpLast:   "last",
 }
 
-// String returns the string version of the OperationValue enumerable.
-func (operationValue OperationValue) String() string {
-	return operationValues[operationValue]
+// String returns the string version of the OperationOption enumerable.
+func (operationOption OperationOption) String() string {
+	return operationOptions[operationOption]
 }
 
-// operationValueFromString returns the operation corresponding with the passed
-// in string. If the value is opValSet, then the value is parsed into the
+// operationOptionFromString returns the option corresponding with the passed
+// in string. If the value is opOpSet, then the value is parsed into the
 // returned int.
-func operationValueFromString(s string) (OperationValue, int, error) {
-	for i, opVal := range operationValues {
-		if opVal == s {
-			return OperationValue(i), 0, nil
+func operationOptionFromString(s string) (OperationOption, int, error) {
+	for i, opOption := range operationOptions {
+		if opOption == s {
+			return OperationOption(i), 0, nil
 		}
 	}
-	valueNumber, err := strconv.Atoi(s)
-	return OpValSet, int(valueNumber), err
+	value, err := strconv.Atoi(s)
+	return OpOpSet, int(value), err
 }
 
 // Action is a single scripted action.
 type Action struct {
-	operation   Operation
-	value       OperationValue
-	valueNumber int
+	operation Operation
+	option    OperationOption
+	value     int
 }
 
 // ActionDetails contains an action and all of the metadata surrounding that
@@ -131,16 +131,16 @@ type ActionDetails struct {
 
 func (ad ActionDetails) String() string {
 	var buf bytes.Buffer
-	fmt.Fprintf(&buf, "Operation:%s", operations[ad.Action.operation])
+	fmt.Fprintf(&buf, "%s", operations[ad.Action.operation])
 
-	if ad.Action.value == OpValSet {
-		if ad.Action.valueNumber > 0 {
-			fmt.Fprintf(&buf, "\tValue:%d", ad.Action.valueNumber)
+	if ad.Action.option == OpOpSet {
+		if ad.Action.value > 0 {
+			fmt.Fprintf(&buf, "\tOption:%d", ad.Action.value)
 		} else {
 			fmt.Fprintf(&buf, "\t ")
 		}
 	} else {
-		fmt.Fprintf(&buf, "\tValue:%s", operations[ad.Action.operation])
+		fmt.Fprintf(&buf, "\tOption:%s", operationOptions[ad.Action.option])
 	}
 
 	fmt.Fprintf(&buf, "\tFirst:%d", ad.first)
@@ -166,10 +166,9 @@ type Script struct {
 	actions  map[int][]Action
 }
 
-// newScript creates a new Script.
-// TODO(bram): Add parsing logic.
-func newScript(maxEpoch int, scriptFile string) (*Script, error) {
-	s := &Script{
+// createScript creates a new Script.
+func createScript(maxEpoch int, scriptFile string) (Script, error) {
+	s := Script{
 		maxEpoch: maxEpoch,
 		actions:  make(map[int][]Action),
 	}
@@ -266,8 +265,8 @@ func (s *Script) parse(scriptFile string) error {
 		details := ActionDetails{Action: Action{operation: op}}
 		// Do we have a value/number?
 		if len(subElements) == 2 {
-			if details.Action.value, details.Action.valueNumber, err = operationValueFromString(subElements[1]); err != nil {
-				return util.Errorf("line %d operation value could not be found or parsed: %s",
+			if details.Action.option, details.Action.value, err = operationOptionFromString(subElements[1]); err != nil {
+				return util.Errorf("line %d operation option could not be found or parsed: %s",
 					lineNumber, subElements[1])
 			}
 		}

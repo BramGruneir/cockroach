@@ -24,7 +24,6 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/cockroachdb/cockroach/util/log"
 	"github.com/cockroachdb/cockroach/util/stop"
 )
 
@@ -48,7 +47,7 @@ func main() {
 	}
 
 	// Clean the output file strings so they can be compared easily or set them
-	// to nil if there is no file.
+	// to nil if there is no file path.
 	if len(*actionOutputFile) > 0 {
 		*actionOutputFile = filepath.Clean(*actionOutputFile)
 	} else {
@@ -66,15 +65,15 @@ func main() {
 	fmt.Printf("Cluster is starting with %d nodes.\n", *startingNodes)
 	fmt.Printf("Script file is %s\n", *scriptInputFile)
 
-	epochWriter := io.MultiWriter(os.Stdout)
-	actionWriter := io.MultiWriter(os.Stdout)
+	var epochWriter io.Writer = os.Stdout
+	var actionWriter io.Writer = os.Stdout
 
 	// Do we have an action output file?
-	if actionOutputFile != nil && len(*actionOutputFile) > 0 {
-		actionOutputF, err := os.OpenFile(*actionOutputFile, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0666)
+	if actionOutputFile != nil {
+		actionOutputF, err := os.OpenFile(*actionOutputFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0664)
 		if err != nil {
-			log.Fatalf("Could not create or open action file:%s - %s", *actionOutputFile, err)
-			return
+			fmt.Printf("Could not create or open action file:%s - %s", *actionOutputFile, err)
+			os.Exit(1)
 		}
 		defer actionOutputF.Close()
 		fmt.Printf("Action Output will be written to %s.\n", *actionOutputFile)
@@ -84,16 +83,16 @@ func main() {
 	}
 
 	// Do we have an epoch output file?
-	if epochOutputFile != nil && len(*epochOutputFile) > 0 {
+	if epochOutputFile != nil {
 		// Is it the same as the action output file?
 		if actionOutputFile != nil && *actionOutputFile == *epochOutputFile {
 			epochWriter = actionWriter
 			fmt.Printf("Epoch Output will also be written to %s.\n", *epochOutputFile)
 		} else {
-			epochOutputF, err := os.OpenFile(*epochOutputFile, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0666)
+			epochOutputF, err := os.OpenFile(*epochOutputFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0664)
 			if err != nil {
-				log.Fatalf("Could not create or open epoch file:%s - %s", *epochOutputFile, err)
-				return
+				fmt.Printf("Could not create or open epoch file:%s - %s", *epochOutputFile, err)
+				os.Exit(1)
 			}
 			defer epochOutputF.Close()
 			fmt.Printf("Epoch Output will be written to %s.\n", *epochOutputFile)
@@ -104,10 +103,10 @@ func main() {
 	}
 
 	fmt.Printf("\nParsing Script:\n")
-	s, err := newScript(*maxEpoch, *scriptInputFile)
+	s, err := createScript(*maxEpoch, *scriptInputFile)
 	if err != nil {
-		log.Fatalf("Could not correctly parse script file:%s - %s", *scriptInputFile, err)
-		return
+		fmt.Printf("Could not correctly parse script file:%s - %s", *scriptInputFile, err)
+		os.Exit(1)
 	}
 
 	fmt.Printf("\nPreparing Cluster:\n")
