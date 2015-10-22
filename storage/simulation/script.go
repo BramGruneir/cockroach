@@ -38,7 +38,7 @@ const (
 	OpSplitRange Operation = iota
 	OpAddNode
 	OpExit
-	// TODO(brma): add optoinal value to addnode to indicated size
+	// TODO(bram): add optional value to addnode to indicated size
 	// TODO(bram): consider many other operations here.
 	//	OpMergeRangeRandom
 	//	OpMergeRangeFirst
@@ -112,7 +112,7 @@ func operationOptionFromString(s string) (OperationOption, int, error) {
 type Action struct {
 	operation Operation
 	option    OperationOption
-	value     int
+	value     int // Value is only used when option is OpOpSet.
 }
 
 // ActionDetails contains an action and all of the metadata surrounding that
@@ -252,10 +252,10 @@ func (s *Script) parse(scriptFile string) error {
 			return util.Errorf("line %d has too many elements: %s", lineNumber, line)
 		}
 
-		// Split the operation into operation-value.
+		// Split the operation into operation-option.
 		subElements := strings.Split(elements[0], "-")
 		if len(subElements) > 2 {
-			return util.Errorf("line %d operation has more than one value: %s", lineNumber, elements[0])
+			return util.Errorf("line %d operation has more than one option: %s", lineNumber, elements[0])
 		}
 		op, found := operationFromString(subElements[0])
 		if !found {
@@ -263,7 +263,7 @@ func (s *Script) parse(scriptFile string) error {
 		}
 
 		details := ActionDetails{Action: Action{operation: op}}
-		// Do we have a value/number?
+		// Do we have a option/number?
 		if len(subElements) == 2 {
 			if details.Action.option, details.Action.value, err = operationOptionFromString(subElements[1]); err != nil {
 				return util.Errorf("line %d operation option could not be found or parsed: %s",

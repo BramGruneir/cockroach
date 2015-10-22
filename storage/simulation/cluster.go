@@ -220,29 +220,29 @@ func (c *Cluster) executeScriptedActions() bool {
 	actions := c.script.getActions(c.epoch)
 	for _, action := range actions {
 		switch action.operation {
-		case (OpExit):
+		case OpExit:
 			{
 				fmt.Fprintf(c.actionWriter, "%d:\tAction:Exit - this will be the last epoch.\n", c.epoch)
 				lastEpoch = true
 			}
-		case (OpSplitRange):
+		case OpSplitRange:
 			{
 				switch action.option {
-				case (OpOpSet):
+				case OpOpSet:
 					fmt.Fprintf(c.actionWriter, "%d:\tAction:SplitRange - splitting the range %d.\n", c.epoch, action.value)
 					c.splitRange(roachpb.RangeID(action.value))
-				case (OpOpRandom):
+				case OpOpRandom:
 					fmt.Fprintf(c.actionWriter, "%d:\tAction:SplitRange - splitting a random range.\n", c.epoch)
 					c.splitRangeRandom()
-				case (OpOpFirst):
+				case OpOpFirst:
 					fmt.Fprintf(c.actionWriter, "%d:\tAction:SplitRange - splitting the first range.\n", c.epoch)
 					c.splitRange(c.rangeIDs[0])
-				case (OpOpLast):
+				case OpOpLast:
 					fmt.Fprintf(c.actionWriter, "%d:\tAction:SplitRange - splitting the last range.\n", c.epoch)
 					c.splitRange(c.rangeIDs[len(c.rangeIDs)-1])
 				}
 			}
-		case (OpAddNode):
+		case OpAddNode:
 			{
 				fmt.Fprintf(c.actionWriter, "%d:\tAction:AddNode - Adding a new node with a new store.\n", c.epoch)
 				c.addNewNodeWithStore()

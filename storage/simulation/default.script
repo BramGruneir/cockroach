@@ -26,6 +26,7 @@
 # of the operations does not matter as script files are fully parsed before
 # starting the simulation. If you would like to have a repeat but don't need a
 # Last or Every, just put in the default values for those.
+# All values are delimited by a single space.
 #
 
 SplitRange-Random 0 100 10 2
