@@ -352,25 +352,6 @@ func (a Allocator) RebalanceTarget(
 	sl, _, _ := a.storePool.getStoreList(rangeID)
 
 	if a.options.UseRuleSolver {
-		// TODO(bram): ShouldRebalance should be part of rebalanceCandidates
-		// and decision made afterward, not it's own function. It is
-		// performing the same operations as rebalanceCandidates and any
-		// missing functionality can be added.
-		var shouldRebalance bool
-		for _, repl := range existing {
-			if leaseStoreID == repl.StoreID {
-				continue
-			}
-			storeDesc, ok := a.storePool.getStoreDescriptor(repl.StoreID)
-			if ok && a.shouldRebalance(storeDesc, sl) {
-				shouldRebalance = true
-				break
-			}
-		}
-		if !shouldRebalance {
-			return nil, nil
-		}
-
 		existingCandidates, candidates := rebalanceCandidates(
 			sl,
 			constraints,
