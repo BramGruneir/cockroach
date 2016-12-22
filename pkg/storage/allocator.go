@@ -164,11 +164,13 @@ func MakeAllocator(storePool *StorePool, options AllocatorOptions) Allocator {
 // be performed.
 func (a *Allocator) ComputeAction(
 	zone config.ZoneConfig, desc *roachpb.RangeDescriptor,
-) (AllocatorAction, float64) {
+) (AllocatorAction, float64, string) {
 	if a.storePool == nil {
 		// Do nothing if storePool is nil for some unittests.
-		return AllocatorNoop, 0
+		return AllocatorNoop, 0, "empty"
 	}
+
+	storePoolString := a.storePool.String()
 
 	// TODO(mrtracy): Handle non-homogeneous and mismatched attribute sets.
 	need := int(zone.NumReplicas)
@@ -178,7 +180,7 @@ func (a *Allocator) ComputeAction(
 		// Priority is adjusted by the difference between the current replica
 		// count and the quorum of the desired replica count.
 		neededQuorum := computeQuorum(need)
-		return AllocatorAdd, addMissingReplicaPriority + float64(neededQuorum-have)
+		return AllocatorAdd, addMissingReplicaPriority + float64(neededQuorum-have), storePoolString
 	}
 	deadReplicas := a.storePool.deadReplicas(desc.RangeID, desc.Replicas)
 	if len(deadReplicas) > 0 {
@@ -186,17 +188,17 @@ func (a *Allocator) ComputeAction(
 		// Adjust the priority by the number of dead replicas the range has.
 		quorum := computeQuorum(len(desc.Replicas))
 		liveReplicas := len(desc.Replicas) - len(deadReplicas)
-		return AllocatorRemoveDead, removeDeadReplicaPriority + float64(quorum-liveReplicas)
+		return AllocatorRemoveDead, removeDeadReplicaPriority + float64(quorum-liveReplicas), storePoolString
 	}
 	if have > need {
 		// Range is over-replicated, and should remove a replica.
 		// Ranges with an even number of replicas get extra priority because
 		// they have a more fragile quorum.
-		return AllocatorRemove, removeExtraReplicaPriority - float64(have%2)
+		return AllocatorRemove, removeExtraReplicaPriority - float64(have%2), storePoolString
 	}
 
 	// Nothing to do.
-	return AllocatorNoop, 0
+	return AllocatorNoop, 0, storePoolString
 }
 
 // AllocateTarget returns a suitable store for a new allocation with the

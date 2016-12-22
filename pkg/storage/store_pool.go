@@ -219,8 +219,13 @@ func (sp *StorePool) String() string {
 		if detail.isDead(now, sp.timeUntilStoreDead, sp.nodeLivenessFn) {
 			_, _ = buf.WriteString("*")
 		}
-		fmt.Fprintf(&buf, ": range-count=%d fraction-used=%.2f",
-			detail.desc.Capacity.RangeCount, detail.desc.Capacity.FractionUsed())
+		var rangeCount int32
+		var fractionUsed float64
+		if detail.desc != nil {
+			rangeCount = detail.desc.Capacity.RangeCount
+			fractionUsed = detail.desc.Capacity.FractionUsed()
+		}
+		fmt.Fprintf(&buf, ": range-count=%d fraction-used=%.2f", rangeCount, fractionUsed)
 		throttled := detail.throttledUntil.Sub(now)
 		if throttled > 0 {
 			fmt.Fprintf(&buf, " [throttled=%.1fs]", throttled.Seconds())

@@ -156,10 +156,10 @@ func (rq *replicateQueue) shouldQueue(
 		return
 	}
 
-	action, priority := rq.allocator.ComputeAction(zone, desc)
+	action, priority, storePoolString := rq.allocator.ComputeAction(zone, desc)
 	if action != AllocatorNoop {
 		if log.V(2) {
-			log.Infof(ctx, "%s repair needed (%s), enqueuing", repl, action)
+			log.Infof(ctx, "%s repair needed (%s), enqueuing\nsp:%s", repl, action, storePoolString)
 		}
 		return true, priority
 	}
@@ -172,7 +172,7 @@ func (rq *replicateQueue) shouldQueue(
 			rq.allocator.ShouldTransferLease(
 				zone.Constraints, desc.Replicas, leaseStoreID, desc.RangeID) {
 			if log.V(2) {
-				log.Infof(ctx, "%s lease transfer needed, enqueuing", repl)
+				log.Infof(ctx, "%s lease transfer needed, enqueuing\nsp:%s", repl, storePoolString)
 			}
 			return true, 0
 		}
@@ -259,9 +259,12 @@ func (rq *replicateQueue) processOneChange(
 		return false, err
 	}
 
-	switch action, _ := rq.allocator.ComputeAction(zone, desc); action {
+	switch action, _, storePoolString := rq.allocator.ComputeAction(zone, desc); action {
 	case AllocatorAdd:
 		log.Event(ctx, "adding a new replica")
+		if log.V(2) {
+			log.Infof(ctx, "adding a new replica for %s\nsp:%s", repl, storePoolString)
+		}
 		newStore, err := rq.allocator.AllocateTarget(
 			zone.Constraints,
 			desc.Replicas,
@@ -283,6 +286,9 @@ func (rq *replicateQueue) processOneChange(
 		}
 	case AllocatorRemove:
 		log.Event(ctx, "removing a replica")
+		if log.V(2) {
+			log.Infof(ctx, "removing a replica for %s\nsp:%s", repl, storePoolString)
+		}
 		// If the lease holder (our local store) is an overfull store (in terms of
 		// leases) allow transferring the lease away.
 		leaseHolderStoreID := repl.store.StoreID()
@@ -325,6 +331,9 @@ func (rq *replicateQueue) processOneChange(
 		}
 	case AllocatorRemoveDead:
 		log.Event(ctx, "removing a dead replica")
+		if log.V(2) {
+			log.Infof(ctx, "removing a dead replica for %s\nsp:%s", repl, storePoolString)
+		}
 		if len(deadReplicas) == 0 {
 			if log.V(1) {
 				log.Warningf(ctx, "range of replica %s was identified as having dead replicas, but no dead replicas were found", repl)
@@ -341,6 +350,9 @@ func (rq *replicateQueue) processOneChange(
 		// The Noop case will result if this replica was queued in order to
 		// rebalance. Attempt to find a rebalancing target.
 		log.Event(ctx, "considering a rebalance")
+		if log.V(2) {
+			log.Infof(ctx, "considering a rebalance for %s\nsp:%s", repl, storePoolString)
+		}
 
 		if rq.canTransferLease() {
 			// We require the lease in order to process replicas, so
@@ -367,6 +379,9 @@ func (rq *replicateQueue) processOneChange(
 		}
 		if rebalanceStore == nil {
 			log.VEventf(ctx, 1, "no suitable rebalance target")
+			if log.V(1) {
+				log.Infof(ctx, "no suitable rebalance target for %s\nsp:%s", repl, storePoolString)
+			}
 			// No action was necessary and no rebalance target was found. Return
 			// without re-queuing this replica.
 			return false, nil

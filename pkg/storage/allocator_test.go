@@ -1587,7 +1587,7 @@ func TestAllocatorComputeAction(t *testing.T) {
 
 		lastPriority := float64(999999999)
 		for i, tcase := range testCases {
-			action, priority := a.ComputeAction(tcase.zone, &tcase.desc)
+			action, priority, _ := a.ComputeAction(tcase.zone, &tcase.desc)
 			if tcase.expectedAction != action {
 				t.Errorf("Test case %d expected action %d, got action %d", i, tcase.expectedAction, action)
 				continue
@@ -1607,7 +1607,7 @@ func TestAllocatorComputeActionNoStorePool(t *testing.T) {
 
 	runToggleRuleSolver(t, func(useRuleSolver bool, t *testing.T) {
 		a := MakeAllocator(nil /* storePool */, AllocatorOptions{UseRuleSolver: useRuleSolver})
-		action, priority := a.ComputeAction(config.ZoneConfig{}, nil)
+		action, priority, _ := a.ComputeAction(config.ZoneConfig{}, nil)
 		if action != AllocatorNoop {
 			t.Errorf("expected AllocatorNoop, but got %v", action)
 		}
