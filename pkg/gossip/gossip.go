@@ -377,9 +377,9 @@ func (g *Gossip) SetStorage(storage Storage) error {
 
 	// If a new resolver was found, immediately signal bootstrap.
 	if newResolverFound {
-		if log.V(1) {
-			log.Infof(ctx, "found new resolvers from storage; signalling bootstrap")
-		}
+		//if log.V(1) {
+		log.Warningf(ctx, "found new resolvers from storage; signalling bootstrap")
+		//}
 		g.signalStalledLocked()
 	}
 	return nil
@@ -484,6 +484,7 @@ func (g *Gossip) SimulationCycle() {
 // address if one does not already exist. Returns whether a new
 // resolver was added. The caller must hold the gossip mutex.
 func (g *Gossip) maybeAddResolver(addr util.UnresolvedAddr) bool {
+	log.Warningf(context.TODO(), "--- maybeAddResolver", addr)
 	if _, ok := g.resolverAddrs[addr]; ok {
 		return false
 	}
@@ -496,6 +497,7 @@ func (g *Gossip) maybeAddResolver(addr util.UnresolvedAddr) bool {
 	g.resolvers = append(g.resolvers, r)
 	g.resolverAddrs[addr] = r
 	log.Eventf(ctx, "add resolver %s", r)
+	log.Warningf(ctx, "--- Added maybeAddResolver", addr)
 	return true
 }
 
@@ -503,6 +505,7 @@ func (g *Gossip) maybeAddResolver(addr util.UnresolvedAddr) bool {
 // bootstrap addresses if not already present. Returns whether a new
 // bootstrap address was added. The caller must hold the gossip mutex.
 func (g *Gossip) maybeAddBootstrapAddress(addr util.UnresolvedAddr, nodeID roachpb.NodeID) bool {
+	log.Warningf(context.TODO(), "---- maybeAdd bootstrap %s, %s", addr, nodeID)
 	if existingNodeID, ok := g.bootstrapAddrs[addr]; ok {
 		if existingNodeID == unknownNodeID || existingNodeID != nodeID {
 			g.bootstrapAddrs[addr] = nodeID
@@ -513,6 +516,7 @@ func (g *Gossip) maybeAddBootstrapAddress(addr util.UnresolvedAddr, nodeID roach
 	g.bootstrapAddrs[addr] = nodeID
 	ctx := g.AnnotateCtx(context.TODO())
 	log.Eventf(ctx, "add bootstrap %s", addr)
+	log.Warningf(ctx, "---- added bootstrap %s, %s", addr, nodeID)
 	return true
 }
 
@@ -591,6 +595,8 @@ func (g *Gossip) updateNodeAddress(key string, content roachpb.Value) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 
+	log.Warningf(ctx, "---- updateNodeAddress: new:%s", desc)
+
 	// If desc is the empty descriptor, that indicates that the node has been
 	// removed from the cluster. If that's the case, remove it from our map of
 	// nodes to prevent other parts of the system from trying to talk to it.
@@ -608,10 +614,16 @@ func (g *Gossip) updateNodeAddress(key string, content roachpb.Value) {
 	}
 
 	// Skip if the node has already been seen.
-	if _, ok := g.nodeDescs[desc.NodeID]; ok {
+	if descOld, ok := g.nodeDescs[desc.NodeID]; ok {
+		if desc.Address.NetworkField != descOld.Address.NetworkField ||
+			desc.Address.AddressField != descOld.Address.AddressField {
+			log.Warningf(ctx, "---- updateNodeAddress: Node has a new address, but we skipped it. old:%s, new:%s", descOld.Address, desc.Address)
+		}
 		return
 	}
 	g.nodeDescs[desc.NodeID] = &desc
+
+	log.Warningf(ctx, "---- updateNodeAddress: new:%s", desc)
 
 	// Recompute max peers based on size of network and set the max
 	// sizes for incoming and outgoing node sets.

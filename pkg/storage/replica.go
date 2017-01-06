@@ -903,6 +903,9 @@ func newNotLeaseHolderError(
 func (r *Replica) redirectOnOrAcquireLease(ctx context.Context) (LeaseStatus, *roachpb.Error) {
 	// Loop until the lease is held or the replica ascertains the actual
 	// lease holder. Returns also on context.Done() (timeout or cancellation).
+	if r.RangeID == 1 {
+		log.Warningf(context.TODO(), "**** redirectOnOrAcquireLease %s", r)
+	}
 	var status LeaseStatus
 	for attempt := 1; ; attempt++ {
 		timestamp := r.store.Clock().Now()
@@ -911,6 +914,9 @@ func (r *Replica) redirectOnOrAcquireLease(ctx context.Context) (LeaseStatus, *r
 			defer r.mu.Unlock()
 
 			status = r.leaseStatus(r.mu.state.Lease, timestamp, r.mu.minLeaseProposedTS)
+			if r.RangeID == 1 {
+				log.Warningf(context.TODO(), "**** gotLeaseStatus for %s, %+v", r, status)
+			}
 			switch status.state {
 			case leaseError:
 				// Lease state couldn't be determined.
@@ -4143,6 +4149,7 @@ func (r *Replica) executeBatch(
 // getLeaseForGossip tries to obtain a range lease. Only one of the replicas
 // should gossip; the bool returned indicates whether it's us.
 func (r *Replica) getLeaseForGossip(ctx context.Context) (bool, *roachpb.Error) {
+	log.Warningf(context.TODO(), "**** getLeaseForGossip %s", r)
 	// If no Gossip available (some tests) or range too fresh, noop.
 	if r.store.Gossip() == nil || !r.IsInitialized() {
 		return false, roachpb.NewErrorf("no gossip or range not initialized")

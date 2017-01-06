@@ -1335,17 +1335,23 @@ func (s *Store) maybeGossipSystemData(ctx context.Context) error {
 		return nil
 	}
 
+	log.Warningf(context.TODO(), "**** Gossiping system ranges")
+
 	for _, span := range keys.GossipedSystemSpans {
+		log.Warningf(context.TODO(), "**** Lookup span %s", span)
 		repl := s.LookupReplica(roachpb.RKey(span.Key), nil)
 		if repl == nil {
 			// This store has no range with this configuration.
 			continue
 		}
+
+		log.Warningf(context.TODO(), "**** getLeaseFor Gossip %s", repl)
 		// Wake up the replica. If it acquires a fresh lease, it will
 		// gossip. If an unexpected error occurs (i.e. nobody else seems to
 		// have an active lease but we still failed to obtain it), return
 		// that error.
 		if _, pErr := repl.getLeaseForGossip(ctx); pErr != nil {
+			log.Warningf(context.TODO(), "**** getError %s, %s", repl, pErr)
 			return pErr.GoError()
 		}
 	}
