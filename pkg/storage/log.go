@@ -48,26 +48,22 @@ const (
 	RangeEventLogRemove RangeEventLogType = "remove"
 )
 
-type rangeLogEvent struct {
+/*type rangeLogEvent struct {
 	timestamp    time.Time
 	rangeID      roachpb.RangeID
 	storeID      roachpb.StoreID
 	eventType    RangeEventLogType
 	otherRangeID *roachpb.RangeID
 	info         *string
-}
+}*/
 
-func (s *Store) insertRangeLogEvent(txn *client.Txn, event rangeLogEvent) error {
+func (s *Store) insertRangeLogEvent(txn *client.Txn, event RangeLogEvent) error {
 	// Record range log event to console log.
-	var info string
-	if event.info != nil {
-		info = *event.info
-	}
 	if log.V(1) {
 		log.Infof(txn.Context, "Range Event: %q, range: %d, info: %s",
-			event.eventType,
-			event.rangeID,
-			info)
+			event.EventType,
+			event.RangeID,
+			event.Info)
 	}
 
 	const insertEventTableStmt = `
@@ -78,25 +74,23 @@ VALUES(
   $1, $2, $3, $4, $5, $6
 )
 `
+	parsedTime, err := time.Parse(time.RFC3339, event.Timestamp)
+	if err != nil {
+		return err
+	}
 	args := []interface{}{
-		event.timestamp,
-		event.rangeID,
-		event.storeID,
-		event.eventType,
-		nil, // otherRangeID
-		nil, // info
-	}
-	if event.otherRangeID != nil {
-		args[4] = *event.otherRangeID
-	}
-	if event.info != nil {
-		args[5] = *event.info
+		parsedTime,
+		event.RangeID,
+		event.StoreID,
+		event.EventType,
+		event.OtherRangeID,
+		event.Info,
 	}
 
 	// Update range event metrics. We do this close to the insertion of the
 	// corresponding range log entry to reduce potential skew between metrics and
 	// range log.
-	switch event.eventType {
+	switch RangeEventLogType(event.EventType) {
 	case RangeEventLogSplit:
 		s.metrics.RangeSplits.Inc(1)
 	case RangeEventLogAdd:
@@ -133,13 +127,13 @@ func (s *Store) logSplit(txn *client.Txn, updatedDesc, newDesc roachpb.RangeDesc
 		return err
 	}
 	infoStr := string(infoBytes)
-	return s.insertRangeLogEvent(txn, rangeLogEvent{
-		timestamp:    selectEventTimestamp(s, txn.Proto.Timestamp),
-		rangeID:      updatedDesc.RangeID,
-		eventType:    RangeEventLogSplit,
-		storeID:      s.StoreID(),
-		otherRangeID: &newDesc.RangeID,
-		info:         &infoStr,
+	return s.insertRangeLogEvent(txn, RangeLogEvent{
+		Timestamp:    selectEventTimestamp(s, txn.Proto.Timestamp).Format(time.RFC3339),
+		RangeID:      updatedDesc.RangeID,
+		EventType:    string(RangeEventLogSplit),
+		StoreID:      s.StoreID(),
+		OtherRangeID: newDesc.RangeID,
+		Info:         infoStr,
 	})
 }
 
@@ -181,12 +175,12 @@ func (s *Store) logChange(
 		return err
 	}
 	infoStr := string(infoBytes)
-	return s.insertRangeLogEvent(txn, rangeLogEvent{
-		timestamp: selectEventTimestamp(s, txn.Proto.Timestamp),
-		rangeID:   desc.RangeID,
-		eventType: logType,
-		storeID:   s.StoreID(),
-		info:      &infoStr,
+	return s.insertRangeLogEvent(txn, RangeLogEvent{
+		Timestamp: selectEventTimestamp(s, txn.Proto.Timestamp).Format(time.RFC3339),
+		RangeID:   desc.RangeID,
+		EventType: string(logType),
+		StoreID:   s.StoreID(),
+		Info:      infoStr,
 	})
 }
 

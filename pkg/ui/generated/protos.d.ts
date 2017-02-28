@@ -2140,6 +2140,7 @@ export interface storageBuilder {
 	decode(buffer: ByteBuffer) : storageMessage;
 	decode64(buffer: string) : storageMessage;
 	Liveness: storage.LivenessBuilder;
+	RangeLogEvent: storage.RangeLogEventBuilder;
 	engine: storage.engineBuilder;
 	storagebase: storage.storagebaseBuilder;
 	
@@ -2204,6 +2205,87 @@ export interface LivenessBuilder {
 	decode(buffer: ArrayBuffer) : LivenessMessage;
 	decode(buffer: ByteBuffer) : LivenessMessage;
 	decode64(buffer: string) : LivenessMessage;
+	
+}
+
+}
+
+
+declare module Proto2TypeScript.cockroach.storage {
+
+	export interface RangeLogEvent {
+
+		
+
+timestamp?: string;
+		
+
+getTimestamp?() : string;
+		setTimestamp?(timestamp : string): void;
+		
+
+
+
+range_id?: Long;
+		
+
+getRangeId?() : Long;
+		setRangeId?(rangeId : Long): void;
+		
+
+
+
+store_id?: number;
+		
+
+getStoreId?() : number;
+		setStoreId?(storeId : number): void;
+		
+
+
+
+event_type?: string;
+		
+
+getEventType?() : string;
+		setEventType?(eventType : string): void;
+		
+
+
+
+other_range_id?: Long;
+		
+
+getOtherRangeId?() : Long;
+		setOtherRangeId?(otherRangeId : Long): void;
+		
+
+
+
+info?: string;
+		
+
+getInfo?() : string;
+		setInfo?(info : string): void;
+		
+
+
+
+}
+
+	export interface RangeLogEventMessage extends RangeLogEvent {
+	toArrayBuffer(): ArrayBuffer;
+	encode(): ByteBuffer;
+	encodeJSON(): string;
+	toBase64(): string;
+	toString(): string;
+}
+
+export interface RangeLogEventBuilder {
+	new(data?: RangeLogEvent): RangeLogEventMessage;
+	decode(buffer: ArrayBuffer) : RangeLogEventMessage;
+	decode(buffer: ByteBuffer) : RangeLogEventMessage;
+	decode64(buffer: string) : RangeLogEventMessage;
 	
 }
 
@@ -3199,6 +3281,8 @@ export interface serverpbBuilder {
 	LivenessResponse: serverpb.LivenessResponseBuilder;
 	ClusterFreezeRequest: serverpb.ClusterFreezeRequestBuilder;
 	ClusterFreezeResponse: serverpb.ClusterFreezeResponseBuilder;
+	RangeLogRequest: serverpb.RangeLogRequestBuilder;
+	RangeLogResponse: serverpb.RangeLogResponseBuilder;
 	DetailsRequest: serverpb.DetailsRequestBuilder;
 	DetailsResponse: serverpb.DetailsResponseBuilder;
 	NodesRequest: serverpb.NodesRequestBuilder;
@@ -4838,6 +4922,69 @@ export interface ClusterFreezeResponseBuilder {
 	decode(buffer: ArrayBuffer) : ClusterFreezeResponseMessage;
 	decode(buffer: ByteBuffer) : ClusterFreezeResponseMessage;
 	decode64(buffer: string) : ClusterFreezeResponseMessage;
+	
+}
+
+}
+
+
+declare module Proto2TypeScript.cockroach.server.serverpb {
+
+	export interface RangeLogRequest {
+
+		
+
+}
+
+	export interface RangeLogRequestMessage extends RangeLogRequest {
+	toArrayBuffer(): ArrayBuffer;
+	encode(): ByteBuffer;
+	encodeJSON(): string;
+	toBase64(): string;
+	toString(): string;
+}
+
+export interface RangeLogRequestBuilder {
+	new(data?: RangeLogRequest): RangeLogRequestMessage;
+	decode(buffer: ArrayBuffer) : RangeLogRequestMessage;
+	decode(buffer: ByteBuffer) : RangeLogRequestMessage;
+	decode64(buffer: string) : RangeLogRequestMessage;
+	
+}
+
+}
+
+
+declare module Proto2TypeScript.cockroach.server.serverpb {
+
+	export interface RangeLogResponse {
+
+		
+
+events?: storage.RangeLogEvent[];
+		
+
+getEvents?() : storage.RangeLogEvent[];
+		setEvents?(events : storage.RangeLogEvent[]): void;
+		
+
+
+
+}
+
+	export interface RangeLogResponseMessage extends RangeLogResponse {
+	toArrayBuffer(): ArrayBuffer;
+	encode(): ByteBuffer;
+	encodeJSON(): string;
+	toBase64(): string;
+	toString(): string;
+}
+
+export interface RangeLogResponseBuilder {
+	new(data?: RangeLogResponse): RangeLogResponseMessage;
+	decode(buffer: ArrayBuffer) : RangeLogResponseMessage;
+	decode(buffer: ByteBuffer) : RangeLogResponseMessage;
+	decode64(buffer: string) : RangeLogResponseMessage;
 	
 }
 

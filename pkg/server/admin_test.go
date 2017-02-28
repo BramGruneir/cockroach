@@ -980,3 +980,21 @@ func TestClusterFreeze(t *testing.T) {
 		}
 	}
 }
+
+func TestAdminAPIRangeLog(t *testing.T) {
+	defer leaktest.AfterTest(t)()
+	s, _, _ := serverutils.StartServer(t, base.TestServerArgs{})
+	defer s.Stopper().Stop()
+	//_ := s.(*TestServer)
+
+	//ac := log.AmbientContext{Tracer: tracing.NewTracer()}
+	//ctx, span := ac.AnnotateCtxWithSpan(context.Background(), "test")
+	//defer span.Finish()
+
+	var resp serverpb.RangeLogResponse
+	if err := getAdminJSONProto(s, "rangelog", &resp); err != nil {
+		t.Fatal(err)
+	}
+
+	fmt.Printf("**** %+v", resp)
+}

@@ -1148,6 +1148,43 @@ func (s *adminServer) ClusterFreeze(
 	return s.waitForStoreFrozen(stream, stores, req.Freeze)
 }
 
+// RangeLog is an endpoint that returns the rangelog events.
+func (s *adminServer) RangeLog(
+	ctx context.Context, req *serverpb.RangeLogRequest,
+) (*serverpb.RangeLogResponse, error) {
+	log.Info(ctx, "************  start request %+v", req)
+	args := sql.SessionArgs{User: s.getUser(req)}
+	session := s.NewSessionForRPC(ctx, args)
+	defer session.Finish(s.server.sqlExecutor)
+	r := s.server.sqlExecutor.ExecuteStatements(session, `
+SELECT timestamp, rangeID, storeID, eventType, otherRangeID, info
+FROM system.rangelog
+WHERE rangeID = 1
+ORDER BY timestamp DESC
+	`, nil)
+	defer r.Close()
+	if err := s.checkQueryResults(r.ResultList, 1); err != nil {
+		return nil, s.serverError(err)
+	}
+
+	var resp serverpb.RangeLogResponse
+	log.Info(ctx, "************  results list %+v", r.ResultList)
+	for i, nRows := 0, r.ResultList[0].Rows.Len(); i < nRows; i++ {
+		/*	row := r.ResultList[0].Rows.At(i)
+			dbDatum, ok := parser.AsDString(row[0])
+			if !ok {
+				return nil, s.serverErrorf("type assertion failed on db name: %T", row[0])
+			}
+			dbName := string(dbDatum)
+			if !s.server.sqlExecutor.IsVirtualDatabase(dbName) {
+				resp.Databases = append(resp.Databases, dbName)
+			}
+		*/
+	}
+
+	return &resp, nil
+}
+
 // sqlQuery allows you to incrementally build a SQL query that uses
 // placeholders. Instead of specific placeholders like $1, you instead use the
 // temporary placeholder $.

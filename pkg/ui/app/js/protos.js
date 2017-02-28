@@ -1332,6 +1332,59 @@ module.exports = require("protobufjs").newBuilder({})['import']({
                             ]
                         },
                         {
+                            "name": "RangeLogEvent",
+                            "fields": [
+                                {
+                                    "rule": "optional",
+                                    "type": "string",
+                                    "name": "timestamp",
+                                    "id": 1
+                                },
+                                {
+                                    "rule": "optional",
+                                    "type": "int64",
+                                    "name": "range_id",
+                                    "id": 2,
+                                    "options": {
+                                        "(gogoproto.customname)": "RangeID",
+                                        "(gogoproto.casttype)": "github.com/cockroachdb/cockroach/pkg/roachpb.RangeID"
+                                    }
+                                },
+                                {
+                                    "rule": "optional",
+                                    "type": "int32",
+                                    "name": "store_id",
+                                    "id": 3,
+                                    "options": {
+                                        "(gogoproto.customname)": "StoreID",
+                                        "(gogoproto.casttype)": "github.com/cockroachdb/cockroach/pkg/roachpb.StoreID"
+                                    }
+                                },
+                                {
+                                    "rule": "optional",
+                                    "type": "string",
+                                    "name": "event_type",
+                                    "id": 4
+                                },
+                                {
+                                    "rule": "optional",
+                                    "type": "int64",
+                                    "name": "other_range_id",
+                                    "id": 5,
+                                    "options": {
+                                        "(gogoproto.customname)": "OtherRangeID",
+                                        "(gogoproto.casttype)": "github.com/cockroachdb/cockroach/pkg/roachpb.RangeID"
+                                    }
+                                },
+                                {
+                                    "rule": "optional",
+                                    "type": "string",
+                                    "name": "info",
+                                    "id": 6
+                                }
+                            ]
+                        },
+                        {
                             "name": "engine",
                             "fields": [],
                             "messages": [
@@ -2634,6 +2687,21 @@ module.exports = require("protobufjs").newBuilder({})['import']({
                                     ]
                                 },
                                 {
+                                    "name": "RangeLogRequest",
+                                    "fields": []
+                                },
+                                {
+                                    "name": "RangeLogResponse",
+                                    "fields": [
+                                        {
+                                            "rule": "repeated",
+                                            "type": "storage.RangeLogEvent",
+                                            "name": "events",
+                                            "id": 1
+                                        }
+                                    ]
+                                },
+                                {
                                     "name": "DetailsRequest",
                                     "fields": [
                                         {
@@ -3339,6 +3407,13 @@ module.exports = require("protobufjs").newBuilder({})['import']({
                                             "options": {
                                                 "(google.api.http).post": "/_admin/v1/cluster/freeze",
                                                 "(google.api.http).body": "*"
+                                            }
+                                        },
+                                        "RangeLog": {
+                                            "request": "RangeLogRequest",
+                                            "response": "RangeLogResponse",
+                                            "options": {
+                                                "(google.api.http).get": "/_admin/v1/rangelog"
                                             }
                                         }
                                     }

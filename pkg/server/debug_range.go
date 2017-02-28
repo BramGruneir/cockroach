@@ -169,6 +169,9 @@ func (s *statusServer) handleDebugRange(w http.ResponseWriter, r *http.Request) 
 		}
 	}
 
+	// Fetch the rangelog history.
+	// ********** s.admin.RangeLog()
+
 	data.postProcessing()
 	t, err := template.New("webpage").Parse(debugRangeTemplate)
 	if err != nil {

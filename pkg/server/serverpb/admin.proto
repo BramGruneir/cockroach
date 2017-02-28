@@ -21,6 +21,7 @@ option go_package = "serverpb";
 import "cockroach/pkg/config/config.proto";
 import "cockroach/pkg/storage/engine/enginepb/mvcc.proto";
 import "cockroach/pkg/storage/liveness.proto";
+import "cockroach/pkg/storage/log.proto";
 import "gogoproto/gogo.proto";
 import "google/api/annotations.proto";
 
@@ -384,6 +385,16 @@ message ClusterFreezeResponse {
   string message = 2;
 }
 
+// RangeLogRequest request the history of a range from the range log.
+message RangeLogRequest {
+  //string range_id = 1 [(gogoproto.customname) = "RangeID"];
+}
+
+// RangeLogResponse contains a list of entries from the range log table.
+message RangeLogResponse {
+  repeated cockroach.storage.RangeLogEvent events = 1;
+}
+
 // Admin is the gRPC API for the admin UI. Through grpc-gateway, we offer
 // REST-style HTTP endpoints that locally proxy to the gRPC endpoints.
 service Admin {
@@ -502,6 +513,13 @@ service Admin {
     option (google.api.http) = {
       post: "/_admin/v1/cluster/freeze"
       body: "*"
+    };
+  }
+
+  // URL: /_admin/v1/rangelog
+  rpc RangeLog(RangeLogRequest) returns (RangeLogResponse) {
+    option (google.api.http) = {
+      get: "/_admin/v1/rangelog"
     };
   }
 }
