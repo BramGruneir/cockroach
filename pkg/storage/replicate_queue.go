@@ -158,7 +158,7 @@ func (rq *replicateQueue) shouldQueue(
 		return
 	}
 
-	action, priority := rq.allocator.ComputeAction(zone, desc)
+	action, priority := rq.allocator.ComputeAction(ctx, zone, desc)
 	if action != AllocatorNoop {
 		if log.V(2) {
 			log.Infof(ctx, "repair needed (%s), enqueuing", action)
@@ -262,7 +262,7 @@ func (rq *replicateQueue) processOneChange(
 		return false, err
 	}
 
-	switch action, _ := rq.allocator.ComputeAction(zone, desc); action {
+	switch action, _ := rq.allocator.ComputeAction(ctx, zone, desc); action {
 	case AllocatorAdd:
 		if log.V(1) {
 			log.Infof(ctx, "adding a new replica")
@@ -305,6 +305,7 @@ func (rq *replicateQueue) processOneChange(
 			zone.Constraints,
 			desc.Replicas,
 			leaseHolderStoreID,
+			zone.NumReplicas,
 		)
 		if err != nil {
 			return false, err

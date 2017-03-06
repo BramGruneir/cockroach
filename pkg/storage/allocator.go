@@ -28,6 +28,8 @@ import (
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
 
+	"strings"
+
 	"github.com/cockroachdb/cockroach/pkg/config"
 	"github.com/cockroachdb/cockroach/pkg/roachpb"
 	"github.com/cockroachdb/cockroach/pkg/util"
@@ -171,7 +173,9 @@ func MakeAllocator(
 // required action that should be taken and a replica on which the action should
 // be performed.
 func (a *Allocator) ComputeAction(
-	zone config.ZoneConfig, desc *roachpb.RangeDescriptor,
+	ctx context.Context,
+	zone config.ZoneConfig,
+	desc *roachpb.RangeDescriptor,
 ) (AllocatorAction, float64) {
 	if a.storePool == nil {
 		// Do nothing if storePool is nil for some unittests.
@@ -186,6 +190,9 @@ func (a *Allocator) ComputeAction(
 		// Priority is adjusted by the difference between the current replica
 		// count and the quorum of the desired replica count.
 		neededQuorum := computeQuorum(need)
+		if log.V(3) {
+			log.Infof(ctx, "Add - need=%d, have=%d", need, have)
+		}
 		return AllocatorAdd, addMissingReplicaPriority + float64(neededQuorum-have)
 	}
 	deadReplicas := a.storePool.deadReplicas(desc.RangeID, desc.Replicas)
@@ -194,12 +201,25 @@ func (a *Allocator) ComputeAction(
 		// Adjust the priority by the number of dead replicas the range has.
 		quorum := computeQuorum(len(desc.Replicas))
 		liveReplicas := len(desc.Replicas) - len(deadReplicas)
+		if log.V(3) {
+			log.Infof(ctx, "Remove Dead - dead=%d, live=%d, quorum=%d",
+				len(deadReplicas), liveReplicas, quorum)
+		}
 		return AllocatorRemoveDead, removeDeadReplicaPriority + float64(quorum-liveReplicas)
 	}
+
 	if have > need {
 		// Range is over-replicated, and should remove a replica.
 		// Ranges with an even number of replicas get extra priority because
 		// they have a more fragile quorum.
+		if log.V(3) {
+			log.Infof(ctx, "Remove - need=%d, have=%d", need, have)
+			var replicaStrings []string
+			for _, r := range desc.Replicas {
+				replicaStrings = append(replicaStrings, r.String())
+			}
+			log.Infof(ctx, "remove - descriptors %s", strings.Join(replicaStrings, "\n"))
+		}
 		return AllocatorRemove, removeExtraReplicaPriority - float64(have%2)
 	}
 
@@ -257,6 +277,7 @@ func (a Allocator) RemoveTarget(
 	constraints config.Constraints,
 	existing []roachpb.ReplicaDescriptor,
 	leaseStoreID roachpb.StoreID,
+	numberDesiredReplicas int32,
 ) (roachpb.ReplicaDescriptor, error) {
 	if len(existing) == 0 {
 		return roachpb.ReplicaDescriptor{}, errors.Errorf("must supply at least one replica to allocator.RemoveTarget()")
@@ -266,9 +287,6 @@ func (a Allocator) RemoveTarget(
 	descriptors := make([]roachpb.StoreDescriptor, 0, len(existing))
 	for _, exist := range existing {
 		if desc, ok := a.storePool.getStoreDescriptor(exist.StoreID); ok {
-			if exist.StoreID == leaseStoreID {
-				continue
-			}
 			descriptors = append(descriptors, desc)
 		}
 	}
@@ -280,12 +298,28 @@ func (a Allocator) RemoveTarget(
 		a.storePool.getLocalities(existing),
 		a.storePool.deterministic,
 	)
+
+	// Do we have enough candidates to consider one for removal?
+	if len(candidates) <= int(numberDesiredReplicas) {
+		if log.V(3) {
+			log.Infof(ctx, "remove requested but not needed: need=%d, total=%d", numberDesiredReplicas, len(candidates))
+			log.Infof(ctx, "remove descriptor: %s", len(existing))
+			log.Infof(ctx, "remove candidates: %s", candidates)
+		}
+		return roachpb.ReplicaDescriptor{},
+			errors.Errorf("not enough replicas to consider removing one: need=%d, total=%d",
+				numberDesiredReplicas, len(candidates))
+	}
+
 	if log.V(3) {
 		log.Infof(ctx, "remove candidates: %s", candidates)
 	}
 	if bad := candidates.selectBad(a.randGen); bad != nil {
 		for _, exist := range existing {
 			if exist.StoreID == bad.StoreID {
+				if log.V(3) {
+					log.Infof(ctx, "remove target: %s", bad)
+				}
 				return exist, nil
 			}
 		}
@@ -322,8 +356,8 @@ func (a Allocator) RebalanceTarget(
 	rangeID roachpb.RangeID,
 ) (*roachpb.StoreDescriptor, error) {
 	sl, _, _ := a.storePool.getStoreList(rangeID)
-
 	existingCandidates, candidates := rebalanceCandidates(
+		ctx,
 		sl,
 		constraints,
 		existing,
@@ -331,19 +365,23 @@ func (a Allocator) RebalanceTarget(
 		a.storePool.deterministic,
 	)
 
+	// If there are no existingCandidates, a rebalance is not needed.
 	if len(existingCandidates) == 0 {
-		return nil, errors.Errorf(
-			"all existing replicas' stores are not present in the store pool: %v\n%s", existing, sl)
+		return nil, nil
 	}
 
 	if log.V(3) {
-		log.Infof(ctx, "existing replicas: %s", existingCandidates)
-		log.Infof(ctx, "candidates: %s", candidates)
+		log.Infof(ctx, "rebalance candidates %s\nexisting replicas: %s\n",
+			candidates, existingCandidates)
 	}
 
 	// Find all candidates that are better than the worst existing replica.
 	targets := candidates.betterThan(existingCandidates[len(existingCandidates)-1])
-	return targets.selectGood(a.randGen), nil
+	rebalanceTarget := targets.selectGood(a.randGen)
+	if log.V(3) {
+		log.Infof(ctx, "rebalance target %s", rebalanceTarget)
+	}
+	return rebalanceTarget, nil
 }
 
 // TransferLeaseTarget returns a suitable replica to transfer the range lease
@@ -661,12 +699,7 @@ func computeQuorum(nodes int) int {
 func filterBehindReplicas(
 	raftStatus *raft.Status, replicas []roachpb.ReplicaDescriptor,
 ) []roachpb.ReplicaDescriptor {
-	if raftStatus == nil || len(raftStatus.Progress) == 0 {
-		// raftStatus.Progress is only populated on the Raft leader which means we
-		// won't be able to rebalance a lease away if the lease holder is not the
-		// Raft leader. This is rare enough not to matter.
-		return nil
-	}
+
 	// NB: We use raftStatus.Commit instead of getQuorumIndex() because the
 	// latter can return a value that is less than the commit index. This is
 	// useful for Raft log truncation which sometimes wishes to keep those
