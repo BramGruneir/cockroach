@@ -461,6 +461,13 @@ func (r *Replica) leasePostApply(
 		}
 		// Make sure the push transaction queue is enabled.
 		r.pushTxnQueue.Enable()
+
+		if r.store.replicateQueue != nil {
+			log.Errorf(ctx, "!!!!!!!!!! Yes replicate queue %d", r.store.Ident.StoreID)
+			r.store.replicateQueue.MaybeAdd(r, r.store.Clock().Now())
+		} else {
+			log.Errorf(ctx, "!!!!!!!!!! No replicate queue %d", r.store.Ident.StoreID)
+		}
 	}
 
 	// Mark the new lease in the replica's lease history.

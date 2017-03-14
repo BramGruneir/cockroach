@@ -24,6 +24,8 @@ import (
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
 
+	"fmt"
+
 	"github.com/cockroachdb/cockroach/pkg/base"
 	"github.com/cockroachdb/cockroach/pkg/gossip"
 	"github.com/cockroachdb/cockroach/pkg/keys"
@@ -128,20 +130,27 @@ func TestReplicateQueueDownReplicate(t *testing.T) {
 	}
 	rangeID := desc.RangeID
 
+	log.Infof(context.Background(), "***** A - rangeID:%d", rangeID)
+
 	countReplicas := func() int {
-		count := 0
+		var count int
+		var ids string
 		for _, s := range tc.Servers {
 			if err := s.Stores().VisitStores(func(store *storage.Store) error {
-				if _, err := store.GetReplica(rangeID); err == nil {
+				if r, err := store.GetReplica(rangeID); err == nil {
 					count++
+					ids = fmt.Sprintf("%s, s%d(%+v)", ids, store.Ident.StoreID, r.RaftStatus())
 				}
 				return nil
 			}); err != nil {
 				t.Fatal(err)
 			}
 		}
+		log.Infof(context.Background(), "***** r%d - replicas on %s", rangeID, ids)
 		return count
 	}
+
+	log.Infof(context.Background(), "***** B")
 
 	// Up-replicate the new range to all servers to create redundant replicas.
 	// Add replicas to all of the nodes. Only 2 of these calls will succeed
@@ -162,11 +171,25 @@ func TestReplicateQueueDownReplicate(t *testing.T) {
 		return nil
 	})
 
+	log.Infof(context.Background(), "***** C")
+
 	// Ensure that the replicas for the new range down replicate.
 	testutils.SucceedsSoon(t, func() error {
+		/*for _, server := range tc.Servers {
+			if err := s.Stores().VisitStores(func(store *storage.Store) error {
+				if _, err := store.GetReplica(rangeID); err == nil {
+					count++
+				}
+				return nil
+			}); err != nil {
+				t.Fatal(err)
+			}
+		}*/
 		if c := countReplicas(); c != replicaCount {
 			return errors.Errorf("replica count = %d", c)
 		}
 		return nil
 	})
+
+	log.Infof(context.Background(), "***** D")
 }
