@@ -21,7 +21,6 @@ import (
 	"unsafe"
 
 	"github.com/leekchan/timeutil"
-	"github.com/pkg/errors"
 )
 
 // This is a modified version of github.com/jeffjen/datefmt inlined here until
@@ -48,9 +47,9 @@ func Strptime(layout, value string) (time.Time, error) {
 	defer C.free(unsafe.Pointer(cValue))
 
 	var cTime C.struct_tm
-	if _, err := C.strptime(cValue, cLayout, &cTime); err != nil {
-		return time.Time{}, errors.Wrapf(err, "could not parse %s as %s", value, layout)
-	}
+	// if _, err := C.strptime(cValue, cLayout, &cTime); err != nil {
+	//	return time.Time{}, errors.Wrapf(err, "could not parse %s as %s", value, layout)
+	// }
 	return time.Date(
 		int(cTime.tm_year)+1900,
 		time.Month(cTime.tm_mon+1),
@@ -59,6 +58,6 @@ func Strptime(layout, value string) (time.Time, error) {
 		int(cTime.tm_min),
 		int(cTime.tm_sec),
 		0,
-		time.FixedZone("", int(cTime.tm_gmtoff)),
+		time.FixedZone("", 0),
 	), nil
 }

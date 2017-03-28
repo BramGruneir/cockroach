@@ -34,7 +34,6 @@ import (
 	"strconv"
 	"strings"
 	"sync/atomic"
-	"syscall"
 	"time"
 
 	"github.com/cockroachdb/cockroach/pkg/build"
@@ -923,9 +922,9 @@ func (sb *syncBuffer) rotateFile(now time.Time) error {
 		// NB: any concurrent output to stderr may straddle the old and new
 		// files. This doesn't apply to log messages as we won't reach this code
 		// unless we're not logging to stderr.
-		if err := syscall.Dup2(int(sb.file.Fd()), syscall.Stderr); err != nil {
-			return err
-		}
+		// if err := syscall.Dup2(int(sb.file.Fd()), syscall.Stderr); err != nil {
+		//	return err
+		//}
 	}
 
 	sb.Writer = bufio.NewWriterSize(sb.file, bufferSize)
