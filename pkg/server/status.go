@@ -71,6 +71,10 @@ const (
 	// that are experiencing problems.
 	problemRangesDebugEndpoint = "/debug/problemranges"
 
+	// nodesDebugEndpoint exposes an html page with a list of all nodes and some
+	// information about them.
+	nodesDebugEndpoint = "/debug/nodes"
+
 	// raftStateDormant is used when there is no known raft state.
 	raftStateDormant = "StateDormant"
 )
@@ -87,13 +91,14 @@ type metricMarshaler interface {
 type statusServer struct {
 	log.AmbientContext
 
-	db           *client.DB
-	gossip       *gossip.Gossip
-	metricSource metricMarshaler
-	nodeLiveness *storage.NodeLiveness
-	rpcCtx       *rpc.Context
-	stores       *storage.Stores
-	stopper      *stop.Stopper
+	db             *client.DB
+	gossip         *gossip.Gossip
+	metricSource   metricMarshaler
+	nodeLiveness   *storage.NodeLiveness
+	rpcCtx         *rpc.Context
+	stores         *storage.Stores
+	stopper        *stop.Stopper
+	startupMessage string
 }
 
 // newStatusServer allocates and returns a statusServer.

@@ -407,6 +407,7 @@ func runStart(cmd *cobra.Command, args []string) error {
 			msg := buf.String()
 			log.Infof(startCtx, "Startup message:\n%s", msg)
 			fmt.Print(msg)
+			s.SetStartupMessage(msg)
 			return nil
 		}(); err != nil {
 			errChan <- err

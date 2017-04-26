@@ -16,22 +16,15 @@
 package server
 
 import (
-	"fmt"
 	"html/template"
 	"net/http"
-	"sort"
 
-	"golang.org/x/net/context"
-
-	"github.com/cockroachdb/cockroach/pkg/base"
 	"github.com/cockroachdb/cockroach/pkg/roachpb"
-	"github.com/cockroachdb/cockroach/pkg/server/serverpb"
 )
 
-// Returns an HTML page displaying information about all the problem ranges in
-// a node or the full cluster.
-func (s *statusServer) handleProblemRanges(w http.ResponseWriter, r *http.Request) {
-	ctx := s.AnnotateCtx(r.Context())
+// Returns an HTML page displaying information about all or a specific node.
+func (s *statusServer) handleDebugNodes(w http.ResponseWriter, r *http.Request) {
+	//ctx := s.AnnotateCtx(r.Context())
 	w.Header().Add("Content-type", "text/html")
 
 	nodeIDString := r.URL.Query().Get("node_id")
@@ -45,100 +38,112 @@ func (s *statusServer) handleProblemRanges(w http.ResponseWriter, r *http.Reques
 		data.NodeID = &nodeID
 	}
 
-	type nodeResponse struct {
-		nodeID roachpb.NodeID
-		resp   *serverpb.RangesResponse
-		err    error
-	}
-
-	isLiveMap := s.nodeLiveness.GetIsLiveMap()
-	if data.NodeID != nil {
-		// If there is a specific nodeID requested, limited the responses to
-		// just this node.
-		if !isLiveMap[*data.NodeID] {
-			http.Error(w, fmt.Sprintf("n%d is not alive", *data.NodeID), http.StatusInternalServerError)
-			return
-		}
-		isLiveMap = map[roachpb.NodeID]bool{
-			*data.NodeID: true,
-		}
-	}
-
-	numNodes := len(isLiveMap)
-	responses := make(chan nodeResponse)
-	nodeCtx, cancel := context.WithTimeout(ctx, base.NetworkTimeout)
-	defer cancel()
-	for nodeID, alive := range isLiveMap {
-		if !alive {
-			data.Failures = append(data.Failures, serverpb.RangeInfo{
-				SourceNodeID: nodeID,
-				ErrorMessage: "node liveness reports that the node is not alive",
-			})
-			numNodes--
-			continue
-		}
-		nodeID := nodeID
-		if err := s.stopper.RunAsyncTask(nodeCtx, func(ctx context.Context) {
-			status, err := s.dialNode(nodeID)
-			var rangesResponse *serverpb.RangesResponse
-			if err == nil {
-				req := &serverpb.RangesRequest{}
-				rangesResponse, err = status.Ranges(ctx, req)
+	/*
+		data := debugProblemRangeData{}
+		if len(nodeIDString) > 0 {
+			nodeIDInt, err := strconv.ParseInt(nodeIDString, 10, 0)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
 			}
-			response := nodeResponse{
-				nodeID: nodeID,
-				resp:   rangesResponse,
-				err:    err,
-			}
-
-			select {
-			case responses <- response:
-				// Response processed.
-			case <-ctx.Done():
-				// Context completed, response no longer needed.
-			}
-		}); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
+			nodeID := roachpb.NodeID(nodeIDInt)
+			data.NodeID = &nodeID
 		}
-	}
-	for remainingResponses := numNodes; remainingResponses > 0; remainingResponses-- {
-		select {
-		case resp := <-responses:
-			if resp.err != nil {
+
+		type nodeResponse struct {
+			nodeID roachpb.NodeID
+			resp   *serverpb.RangesResponse
+			err    error
+		}
+
+		isLiveMap := s.nodeLiveness.GetIsLiveMap()
+		if data.NodeID != nil {
+			// If there is a specific nodeID requested, limited the responses to
+			// just this node.
+			if !isLiveMap[*data.NodeID] {
+				http.Error(w, fmt.Sprintf("n%d is not alive", *data.NodeID), http.StatusInternalServerError)
+				return
+			}
+			isLiveMap = map[roachpb.NodeID]bool{
+				*data.NodeID: true,
+			}
+		}
+
+		numNodes := len(isLiveMap)
+		responses := make(chan nodeResponse)
+		nodeCtx, cancel := context.WithTimeout(ctx, base.NetworkTimeout)
+		defer cancel()
+		for nodeID, alive := range isLiveMap {
+			if !alive {
 				data.Failures = append(data.Failures, serverpb.RangeInfo{
-					SourceNodeID: resp.nodeID,
-					ErrorMessage: resp.err.Error(),
+					SourceNodeID: nodeID,
+					ErrorMessage: "node liveness reports that the node is not alive",
 				})
+				numNodes--
 				continue
 			}
-			for _, info := range resp.resp.Ranges {
-				if len(info.ErrorMessage) != 0 {
-					data.Failures = append(data.Failures, info)
+			nodeID := nodeID
+			if err := s.stopper.RunAsyncTask(nodeCtx, func(ctx context.Context) {
+				status, err := s.dialNode(nodeID)
+				var rangesResponse *serverpb.RangesResponse
+				if err == nil {
+					req := &serverpb.RangesRequest{}
+					rangesResponse, err = status.Ranges(ctx, req)
+				}
+				response := nodeResponse{
+					nodeID: nodeID,
+					resp:   rangesResponse,
+					err:    err,
+				}
+
+				select {
+				case responses <- response:
+					// Response processed.
+				case <-ctx.Done():
+					// Context completed, response no longer needed.
+				}
+			}); err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+		}
+		for remainingResponses := numNodes; remainingResponses > 0; remainingResponses-- {
+			select {
+			case resp := <-responses:
+				if resp.err != nil {
+					data.Failures = append(data.Failures, serverpb.RangeInfo{
+						SourceNodeID: resp.nodeID,
+						ErrorMessage: resp.err.Error(),
+					})
 					continue
 				}
-				if info.Problems.Unavailable {
-					data.Unavailable = append(data.Unavailable, info.State.Desc.RangeID)
+				for _, info := range resp.resp.Ranges {
+					if len(info.ErrorMessage) != 0 {
+						data.Failures = append(data.Failures, info)
+						continue
+					}
+					if info.Problems.Unavailable {
+						data.Unavailable = append(data.Unavailable, info.State.Desc.RangeID)
+					}
+					if info.Problems.LeaderNotLeaseHolder {
+						data.LeaderNotLeaseholder = append(data.LeaderNotLeaseholder, info.State.Desc.RangeID)
+					}
 				}
-				if info.Problems.LeaderNotLeaseHolder {
-					data.LeaderNotLeaseholder = append(data.LeaderNotLeaseholder, info.State.Desc.RangeID)
-				}
+			case <-ctx.Done():
+				http.Error(w, ctx.Err().Error(), http.StatusRequestTimeout)
+				return
 			}
-		case <-ctx.Done():
-			http.Error(w, ctx.Err().Error(), http.StatusRequestTimeout)
-			return
 		}
-	}
 
-	if data.NodeID != nil {
-		data.Title = fmt.Sprintf("Problem Ranges for Node n%d", *data.NodeID)
-	} else {
-		data.Title = "Problem Ranges for the Cluster"
-	}
+		if data.NodeID != nil {
+			data.Title = fmt.Sprintf("Problem Ranges for Node n%d", *data.NodeID)
+		} else {
+			data.Title = "Problem Ranges for the Cluster"
+		}
 
-	sort.Sort(data.Unavailable)
-	sort.Sort(data.LeaderNotLeaseholder)
-
+		sort.Sort(data.Unavailable)
+		sort.Sort(data.LeaderNotLeaseholder)
+	*/
 	t, err := template.New("webpage").Parse(debugProblemRangesTemplate)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -149,15 +154,18 @@ func (s *statusServer) handleProblemRanges(w http.ResponseWriter, r *http.Reques
 	}
 }
 
-type debugProblemRangeData struct {
-	NodeID               *roachpb.NodeID
-	Title                string
-	Failures             rangeInfoSlice
-	Unavailable          roachpb.RangeIDSlice
-	LeaderNotLeaseholder roachpb.RangeIDSlice
+type debugNodeDetails struct {
+	ID             roachpb.NodeID
+	StartupMessage string
 }
 
-const debugProblemRangesTemplate = `
+type debugNodesData struct {
+	Title    string
+	Nodes    []debugNodeDetails
+	Failures rangeInfoSlice
+}
+
+const debugNodesTemplate = `
 <!DOCTYPE html>
 <HTML>
   <HEAD>

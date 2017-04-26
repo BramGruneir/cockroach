@@ -122,6 +122,8 @@ func init() {
       <tr>
         <td>node status</td>
         <td>
+          <a href="/debug/nodes">all nodes info</a><br />
+          <a href="/debug/nodes?node_id=1">a single node's info</a><br />
           <a href="/_status/gossip/local">gossip</a><br />
           <a href="/_status/ranges/local">ranges</a><br />
         </td>

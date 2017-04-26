@@ -829,6 +829,7 @@ func (s *Server) Start(ctx context.Context) error {
 	s.mux.Handle(statusVars, http.HandlerFunc(s.status.handleVars))
 	s.mux.Handle(rangeDebugEndpoint, http.HandlerFunc(s.status.handleDebugRange))
 	s.mux.Handle(problemRangesDebugEndpoint, http.HandlerFunc(s.status.handleProblemRanges))
+	s.mux.Handle(nodesDebugEndpoint, http.HandlerFunc(s.status.handleDebugNodes))
 	log.Event(ctx, "added http endpoints")
 
 	// Before serving SQL requests, we have to make sure the database is
@@ -957,6 +958,11 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		w = gzw
 	}
 	s.mux.ServeHTTP(w, r)
+}
+
+// SetStartupMessage stores the startup message in the status server.
+func (s *Server) SetStartupMessage(msg string) {
+	s.status.startupMessage = msg
 }
 
 type gzipResponseWriter struct {
