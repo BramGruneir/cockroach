@@ -19,16 +19,16 @@ option go_package = "serverpb";
 import "gogoproto/gogo.proto";
 import "google/api/annotations.proto";
 
-message ReportProblemRangesRequest {
-  string node_id = 1 [(gogoproto.customname) = "NodeID"];
-}
-
 message ReportFailure {
   int32 node_id = 1 [
     (gogoproto.customname) = "NodeID",
     (gogoproto.casttype) = "github.com/cockroachdb/cockroach/pkg/roachpb.NodeID"
   ];
   string error_message = 2;
+}
+
+message ReportProblemRangesRequest {
+  string node_id = 1 [(gogoproto.customname) = "NodeID"];
 }
 
 message ReportProblemRangesResponse {
@@ -61,10 +61,29 @@ message ReportProblemRangesResponse {
   ];
 }
 
+message ReportNetworkRequest {
+  // This should be a comma separated list of node ids.
+  string node_ids = 1 [(gogoproto.customname) = "NodeIDs"];
+  // A regex used to filter nodes based on locality.
+  string locality = 2;
+}
+
+message ReportNetworkResponse {
+  repeated ReportFailure failures = 1 [(gogoproto.nullable) = false];
+  repeated string filters = 2;
+
+}
+
+
 service Report {
   rpc ProblemRanges(ReportProblemRangesRequest) returns (ReportProblemRangesResponse) {
     option (google.api.http) = {
       get: "/_report/problemranges"
+    };
+  }
+  rpc Network(ReportNetworkRequest) returns (ReportNetworkResponse) {
+    option (google.api.http) = {
+      get: "/_report/network"
     };
   }
 }
