@@ -794,6 +794,7 @@ type RowDeleter struct {
 	FetchCols            []ColumnDescriptor
 	FetchColIDtoRowIndex map[ColumnID]int
 	Fks                  fkDeleteHelper
+	cascader             *cascader
 	// For allocation avoidance.
 	startKey roachpb.Key
 	endKey   roachpb.Key
@@ -805,6 +806,24 @@ type RowDeleter struct {
 // expectation of which values are passed as values to DeleteRow. Any column
 // passed in requestedCols will be included in FetchCols.
 func MakeRowDeleter(
+	txn *client.Txn,
+	tableDesc *TableDescriptor,
+	fkTables TableLookupsByID,
+	requestedCols []ColumnDescriptor,
+	checkFKs bool,
+	alloc *DatumAlloc,
+) (RowDeleter, error) {
+	rowDeleter, err := makeRowDeleterWithoutCascader(
+		txn, tableDesc, fkTables, requestedCols, checkFKs, alloc,
+	)
+	if err != nil {
+		return RowDeleter{}, err
+	}
+	rowDeleter.cascader = makeCascader(txn, fkTables, alloc)
+	return rowDeleter, nil
+}
+
+func makeRowDeleterWithoutCascader(
 	txn *client.Txn,
 	tableDesc *TableDescriptor,
 	fkTables TableLookupsByID,
@@ -873,12 +892,38 @@ func MakeRowDeleter(
 func (rd *RowDeleter) DeleteRow(
 	ctx context.Context, b *client.Batch, values []tree.Datum, traceKV bool,
 ) error {
-	if err := rd.Fks.cascadeAll(ctx, values, traceKV); err != nil {
+	primaryIndexKey, secondaryIndexEntries, err := rd.Helper.encodeIndexes(rd.FetchColIDtoRowIndex, values)
+	if err != nil {
 		return err
 	}
-	if err := rd.Fks.checkAll(ctx, values); err != nil {
+
+	for _, secondaryIndexEntry := range secondaryIndexEntries {
+		log.Warningf(ctx, "!!!!!!!!!! Del Index %s", secondaryIndexEntry.Key)
+		if traceKV {
+			log.VEventf(ctx, 2, "Del %s", secondaryIndexEntry.Key)
+		}
+		b.Del(secondaryIndexEntry.Key)
+	}
+
+	// Delete the row.
+	rd.startKey = roachpb.Key(primaryIndexKey)
+	rd.endKey = roachpb.Key(encoding.EncodeNotNullDescending(primaryIndexKey))
+	log.Warningf(ctx, "!!!!!!!!!! Del Range %s - %s", rd.startKey, rd.endKey)
+	if traceKV {
+		log.VEventf(ctx, 2, "DelRange %s - %s", rd.startKey, rd.endKey)
+	}
+	b.DelRange(&rd.startKey, &rd.endKey, false /* returnKeys */)
+	rd.startKey, rd.endKey = nil, nil
+
+	if err := rd.cascader.cascadeAll(ctx, rd.Helper.TableDesc, tree.Datums(values), traceKV); err != nil {
 		return err
 	}
+	return rd.Fks.checkAll(ctx, values)
+}
+
+func (rd *RowDeleter) deleteRowForCascade(
+	ctx context.Context, b *client.Batch, values []tree.Datum, traceKV bool,
+) error {
 	primaryIndexKey, secondaryIndexEntries, err := rd.Helper.encodeIndexes(rd.FetchColIDtoRowIndex, values)
 	if err != nil {
 		return err
