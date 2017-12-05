@@ -15,6 +15,7 @@
 package sqlbase
 
 import (
+	"github.com/cockroachdb/cockroach/pkg/util/mon"
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
 
@@ -72,10 +73,11 @@ func spanForIndexValues(
 // batchRequestForIndexValues creates a batch request against an index to
 // extract the primary keys needed for cascading.
 func batchRequestForIndexValues(
+	ctx context.Context,
 	referencedIndex *IndexDescriptor,
 	referencingTable *TableDescriptor,
 	referencingIndex *IndexDescriptor,
-	values []tree.Datums,
+	values *RowContainer,
 	colIDtoRowIndex map[ColumnID]int,
 ) (roachpb.BatchRequest, error) {
 
@@ -97,9 +99,10 @@ func batchRequestForIndexValues(
 	}
 
 	var req roachpb.BatchRequest
-	for _, value := range values {
+	for i := 0; i < values.Len(); i++ {
+		log.Warningf(ctx, "********* values at 0:%s", values.At(i))
 		span, err := spanForIndexValues(
-			referencingTable, referencingIndex, prefixLen, indexColIDs, value, keyPrefix,
+			referencingTable, referencingIndex, prefixLen, indexColIDs, values.At(i), keyPrefix,
 		)
 		if err != nil {
 			return roachpb.BatchRequest{}, err
@@ -254,7 +257,7 @@ func (c *cascader) deleteRow(
 	referencedIndex *IndexDescriptor,
 	referencingTable *TableDescriptor,
 	referencingIndex *IndexDescriptor,
-	values []tree.Datums,
+	values *RowContainer,
 	colIDtoRowIndex map[ColumnID]int,
 	traceKV bool,
 ) ([]tree.Datums, map[ColumnID]int, error) {
@@ -264,19 +267,22 @@ func (c *cascader) deleteRow(
 	if traceKV {
 		log.VEventf(ctx, 2,
 			"cascading delete from redIndex:%s, into table:%s, using index:%s for values:%+v",
-			referencedIndex.Name, referencingTable.Name, referencingIndex.Name, values,
+			referencedIndex.Name, referencingTable.Name, referencingIndex.Name, values.chunks,
 		)
 	}
 	req, err := batchRequestForIndexValues(
-		referencedIndex, referencingTable, referencingIndex, values, colIDtoRowIndex,
+		ctx, referencedIndex, referencingTable, referencingIndex, values, colIDtoRowIndex,
 	)
 	if err != nil {
 		return nil, nil, err
 	}
+	log.Warningf(ctx, "*********** req:%+v", req)
 	br, roachErr := c.txn.Send(ctx, req)
 	if roachErr != nil {
 		return nil, nil, roachErr.GoError()
 	}
+
+	log.Warningf(ctx, "*********** br:%+v", br)
 
 	// Create or retrieve the index row fetcher.
 	indexRowFetcher, err := c.addIndexRowFetcher(referencingTable, referencingIndex)
@@ -306,6 +312,7 @@ func (c *cascader) deleteRow(
 			primaryKeysToDel = append(primaryKeysToDel, primaryKey)
 		}
 	}
+	log.Warningf(ctx, "********** pks:%s", primaryKeysToDel)
 
 	// Early exit if no rows need to be deleted.
 	if len(primaryKeysToDel) == 0 {
@@ -352,6 +359,7 @@ func (c *cascader) deleteRow(
 			rowsToDelete = append(rowsToDelete, rowToDelete)
 		}
 	}
+	log.Warningf(ctx, "********** rows:%s", rowsToDelete)
 
 	// Delete the rows in a new batch.
 	// TODO(bram): Can we move this batch out of this function?  Might not work
@@ -373,28 +381,52 @@ func (c *cascader) deleteRow(
 }
 
 type cascadeQueueElement struct {
-	table *TableDescriptor
-	// TODO(Bram): replace values' datums with row_containers for memory
-	// monitoring.
-	values          []tree.Datums
+	table           *TableDescriptor
+	values          *RowContainer
 	colIDtoRowIndex map[ColumnID]int
 }
 
 // cascadeQueue is used for a breadth first walk of the referential integrity
 // graph.
-type cascadeQueue []cascadeQueueElement
+type cascadeQueue struct {
+	queue []cascadeQueueElement
+	mon   *mon.BytesMonitor
+}
 
-func (q *cascadeQueue) enqueue(elem cascadeQueueElement) {
-	*q = append((*q), elem)
+func (q *cascadeQueue) enqueue(
+	ctx context.Context, table *TableDescriptor, values []tree.Datums, colIDtoRowIndex map[ColumnID]int,
+) error {
+	colTypeInfo, err := makeColTypeInfo(table, colIDtoRowIndex)
+	if err != nil {
+		return err
+	}
+	rowContainer := NewRowContainer(q.mon.MakeBoundAccount(), colTypeInfo, len(values))
+	for _, value := range values {
+		if _, err := rowContainer.AddRow(ctx, value); err != nil {
+			return err
+		}
+	}
+	(*q).queue = append((*q).queue, cascadeQueueElement{
+		table:           table,
+		values:          rowContainer,
+		colIDtoRowIndex: colIDtoRowIndex,
+	})
+	return nil
 }
 
 func (q *cascadeQueue) dequeue() (cascadeQueueElement, bool) {
-	if len(*q) == 0 {
+	if len((*q).queue) == 0 {
 		return cascadeQueueElement{}, false
 	}
-	elem := (*q)[0]
-	*q = (*q)[1:]
+	elem := ((*q).queue)[0]
+	(*q).queue = ((*q).queue)[1:]
 	return elem, true
+}
+
+func (q *cascadeQueue) close(ctx context.Context) {
+	for _, elem := range q.queue {
+		elem.values.Close(ctx)
+	}
 }
 
 // cascadeAll performs all required cascading operations, then checks all the
@@ -404,14 +436,19 @@ func (c *cascader) cascadeAll(
 	table *TableDescriptor,
 	originalValues tree.Datums,
 	colIDtoRowIndex map[ColumnID]int,
+	mon *mon.BytesMonitor,
 	traceKV bool,
 ) error {
 	// Perform all the required cascading operations.
-	var cascadeQ cascadeQueue
-	cascadeQ.enqueue(cascadeQueueElement{table, []tree.Datums{originalValues}, colIDtoRowIndex})
+	cascadeQ := cascadeQueue{mon: mon}
+	if err := cascadeQ.enqueue(ctx, table, []tree.Datums{originalValues}, colIDtoRowIndex); err != nil {
+		cascadeQ.close(ctx)
+		return err
+	}
 	for {
 		select {
 		case <-ctx.Done():
+			cascadeQ.close(ctx)
 			return NewQueryCanceledError()
 		default:
 		}
@@ -419,15 +456,19 @@ func (c *cascader) cascadeAll(
 		if !exists {
 			break
 		}
+		log.Warningf(ctx, ">>>>>>>>> Dequeue:%s", elem.values.At(0))
 		if traceKV {
 			log.VEventf(ctx, 2, "cascading into %s for values:%s", elem.table.Name, elem.values)
 		}
 		for _, referencedIndex := range elem.table.AllNonDropIndexes() {
 			for _, ref := range referencedIndex.ReferencedBy {
+				log.Warningf(ctx, ">>>>>>>>> ref index:%d", ref.Index)
 				referencingTable, ok := c.tablesByID[ref.Table]
 				if !ok {
+					cascadeQ.close(ctx)
 					return errors.Errorf("Could not find table:%d in table descriptor map", ref.Table)
 				}
+				log.Warningf(ctx, ">>>>>>>>> refing table:%s", referencingTable.Table.Name)
 				if referencingTable.IsAdding {
 					// We can assume that a table being added but not yet public is empty,
 					// and thus does not need to be checked for cascading.
@@ -435,26 +476,31 @@ func (c *cascader) cascadeAll(
 				}
 				referencingIndex, err := referencingTable.Table.FindIndexByID(ref.Index)
 				if err != nil {
+					cascadeQ.close(ctx)
 					return err
 				}
+				log.Warningf(ctx, ">>>>>>>>> refing index:%d-%s", referencingIndex.ID, referencingIndex.Name)
 				if referencingIndex.ForeignKey.OnDelete == ForeignKeyReference_CASCADE {
+					log.Warningf(ctx, ">>>>>>>>> cascading on delete")
 					returnedValues, colIDtoRowIndex, err := c.deleteRow(
 						ctx, &referencedIndex, referencingTable.Table, referencingIndex, elem.values, elem.colIDtoRowIndex, traceKV,
 					)
 					if err != nil {
+						cascadeQ.close(ctx)
 						return err
 					}
 					if len(returnedValues) > 0 {
+						log.Warningf(ctx, "********* returned values:%s", returnedValues)
 						// If a row was deleted, add the table to the queue.
-						cascadeQ.enqueue(cascadeQueueElement{
-							table:           referencingTable.Table,
-							values:          returnedValues,
-							colIDtoRowIndex: colIDtoRowIndex,
-						})
+						if err := cascadeQ.enqueue(ctx, referencingTable.Table, returnedValues, colIDtoRowIndex); err != nil {
+							cascadeQ.close(ctx)
+							return err
+						}
 					}
 				}
 			}
 		}
+		elem.values.Close(ctx)
 	}
 
 	// Check all values to ensure there are no orphans.

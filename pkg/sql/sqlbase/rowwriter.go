@@ -19,6 +19,8 @@ import (
 	"fmt"
 	"sort"
 
+	"github.com/cockroachdb/cockroach/pkg/util/mon"
+
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
 
@@ -585,6 +587,7 @@ func (ru *RowUpdater) UpdateRow(
 	b *client.Batch,
 	oldValues []tree.Datum,
 	updateValues []tree.Datum,
+	mon *mon.BytesMonitor,
 	traceKV bool,
 ) ([]tree.Datum, error) {
 	if len(oldValues) != len(ru.FetchCols) {
@@ -655,7 +658,7 @@ func (ru *RowUpdater) UpdateRow(
 			return nil, err
 		}
 
-		if err := ru.rd.DeleteRow(ctx, b, oldValues, traceKV); err != nil {
+		if err := ru.rd.DeleteRow(ctx, b, oldValues, mon, traceKV); err != nil {
 			return nil, err
 		}
 		if err := ru.ri.InsertRow(
@@ -913,13 +916,13 @@ func makeRowDeleterWithoutCascader(
 // with the given values. It also will cascade as required and check for
 // orphaned rows.
 func (rd *RowDeleter) DeleteRow(
-	ctx context.Context, b *client.Batch, values []tree.Datum, traceKV bool,
+	ctx context.Context, b *client.Batch, values []tree.Datum, mon *mon.BytesMonitor, traceKV bool,
 ) error {
 	if err := rd.deleteRowNoCascade(ctx, b, values, traceKV); err != nil {
 		return err
 	}
 	if err := rd.cascader.cascadeAll(
-		ctx, rd.Helper.TableDesc, tree.Datums(values), rd.FetchColIDtoRowIndex, traceKV,
+		ctx, rd.Helper.TableDesc, tree.Datums(values), rd.FetchColIDtoRowIndex, mon, traceKV,
 	); err != nil {
 		return err
 	}
