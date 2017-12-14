@@ -168,7 +168,7 @@ func (tu *tableUpdater) row(
 ) (tree.Datums, error) {
 	oldValues := values[:len(tu.ru.FetchCols)]
 	updateValues := values[len(tu.ru.FetchCols):]
-	return tu.ru.UpdateRow(ctx, tu.b, oldValues, updateValues, tu.mon, traceKV)
+	return tu.ru.UpdateRow(ctx, tu.b, oldValues, updateValues, tu.mon, sqlbase.CheckFKs, traceKV)
 }
 
 func (tu *tableUpdater) finalize(ctx context.Context, _ bool) (*sqlbase.RowContainer, error) {
@@ -466,7 +466,9 @@ func (tu *tableUpserter) flush(
 				if err != nil {
 					return nil, err
 				}
-				updatedRow, err := tu.ru.UpdateRow(ctx, b, existingValues, updateValues, tu.mon, traceKV)
+				updatedRow, err := tu.ru.UpdateRow(
+					ctx, b, existingValues, updateValues, tu.mon, sqlbase.CheckFKs, traceKV,
+				)
 				if err != nil {
 					return nil, err
 				}
@@ -684,7 +686,7 @@ func (td *tableDeleter) init(txn *client.Txn, mon *mon.BytesMonitor) error {
 func (td *tableDeleter) row(
 	ctx context.Context, values tree.Datums, traceKV bool,
 ) (tree.Datums, error) {
-	return nil, td.rd.DeleteRow(ctx, td.b, values, td.mon, traceKV)
+	return nil, td.rd.DeleteRow(ctx, td.b, values, td.mon, sqlbase.CheckFKs, traceKV)
 }
 
 // finalize is part of the tableWriter interface.

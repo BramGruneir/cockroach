@@ -65,7 +65,7 @@ type FKCheck int
 
 const (
 	// CheckDeletes checks if rows reference a changed value.
-	CheckDeletes = iota
+	CheckDeletes FKCheck = iota
 	// CheckInserts checks if a new value references an existing row.
 	CheckInserts
 	// CheckUpdates checks all references (CheckDeletes+CheckInserts).
@@ -305,6 +305,8 @@ func (f *fkBatchChecker) runCheck(
 	}
 	defer f.reset()
 
+	log.Warningf(ctx, "********** checking oldRow:%s, newRow%s", oldRow, newRow)
+
 	br, err := f.txn.Send(ctx, f.batch)
 	if err != nil {
 		return err.GoError()
@@ -319,9 +321,18 @@ func (f *fkBatchChecker) runCheck(
 		}
 		switch fk.dir {
 		case CheckInserts:
+			log.Warningf(ctx, "********** checking inserts oldRow:%s, newRow%s", oldRow, newRow)
+
 			// If we're inserting, then there's a violation if the scan found nothing.
 			if fk.rf.kvEnd {
 				fkValues := make(tree.Datums, fk.prefixLen)
+
+				//log.Warningf(ctx, "********** checking searchIdx.ColumnNames:%v", fk.searchIdx.ColumnNames)
+				//log.Warningf(ctx, "********** checking searchIdx.ColumnIDs:%v", fk.searchIdx.ColumnIDs)
+				//log.Warningf(ctx, "********** checking searchIdx.Name:%v", fk.searchIdx.Name)
+				//log.Warningf(ctx, "********** checking searchIdx.ColumnNames:%v", fk.searchIdx.ColumnNames[:fk.prefixLen])
+				//log.Warningf(ctx, "********** checking searchIdx.ColumnIDs:%v", fk.searchIdx.ColumnIDs[:fk.prefixLen])
+				//log.Warningf(ctx, "********** checking fk.ids:%v", fk.ids)
 				for valueIdx, colID := range fk.searchIdx.ColumnIDs[:fk.prefixLen] {
 					fkValues[valueIdx] = newRow[fk.ids[colID]]
 				}
@@ -330,6 +341,8 @@ func (f *fkBatchChecker) runCheck(
 					fkValues, fk.searchTable.Name, fk.searchIdx.Name, fk.searchIdx.ColumnNames[:fk.prefixLen])
 			}
 		case CheckDeletes:
+			log.Warningf(ctx, "********** checking deletes oldRow:%s, newRow%s", oldRow, newRow)
+
 			// If we're deleting, then there's a violation if the scan found something.
 			if !fk.rf.kvEnd {
 				if oldRow == nil {
