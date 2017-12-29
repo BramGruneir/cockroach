@@ -253,7 +253,12 @@ type putter interface {
 // InsertRow adds to the batch the kv operations necessary to insert a table row
 // with the given values.
 func (ri *RowInserter) InsertRow(
-	ctx context.Context, b putter, values []tree.Datum, ignoreConflicts bool, traceKV bool,
+	ctx context.Context,
+	b putter,
+	values []tree.Datum,
+	ignoreConflicts bool,
+	checkFKs checkFKConstraints,
+	traceKV bool,
 ) error {
 	if len(values) != len(ri.InsertCols) {
 		return errors.Errorf("got %d values but expected %d", len(values), len(ri.InsertCols))
@@ -275,8 +280,10 @@ func (ri *RowInserter) InsertRow(
 		}
 	}
 
-	if err := ri.Fks.checkAll(ctx, values); err != nil {
-		return err
+	if checkFKs == CheckFKs {
+		if err := ri.Fks.checkAll(ctx, values); err != nil {
+			return err
+		}
 	}
 
 	primaryIndexKey, secondaryIndexEntries, err := ri.Helper.encodeIndexes(ri.InsertColIDtoRowIndex, values)
@@ -619,7 +626,7 @@ func (ru *RowUpdater) UpdateRow(
 	checkFKs checkFKConstraints,
 	traceKV bool,
 ) ([]tree.Datum, error) {
-	log.Warningf(ctx, "********* updater")
+	// log.Warningf(ctx, "********* updater")
 
 	batch := b
 	if ru.cascader != nil {
@@ -677,15 +684,15 @@ func (ru *RowUpdater) UpdateRow(
 		}
 	}
 
-	log.Warningf(ctx, "************ ru.NewValues:%s", ru.newValues)
+	// log.Warningf(ctx, "************ ru.NewValues:%s", ru.newValues)
 
 	if rowPrimaryKeyChanged {
-		log.Warningf(ctx, "************ updater pk")
+		// log.Warningf(ctx, "************ updater pk")
 		if err := ru.rd.DeleteRow(ctx, batch, oldValues, mon, SkipFKs, traceKV); err != nil {
 			return nil, err
 		}
 		if err := ru.ri.InsertRow(
-			ctx, batch, ru.newValues, false /* ignoreConflicts */, traceKV,
+			ctx, batch, ru.newValues, false /* ignoreConflicts */, CheckFKs, traceKV,
 		); err != nil {
 			return nil, err
 		}
@@ -729,7 +736,7 @@ func (ru *RowUpdater) UpdateRow(
 		return ru.newValues, nil
 	}
 
-	log.Warningf(ctx, "************ updater not pk")
+	// log.Warningf(ctx, "************ updater not pk")
 
 	// Add the new values.
 	// TODO(dan): This has gotten very similar to the loop in insertRow, see if

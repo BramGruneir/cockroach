@@ -980,7 +980,6 @@ CREATE TABLE self_x2 (
   x STRING PRIMARY KEY
  ,y STRING UNIQUE REFERENCES self_x2(x) ON DELETE CASCADE
  ,z STRING REFERENCES self_x2(y) ON DELETE CASCADE
- ,INDEX(z)
 );
 
 statement ok
@@ -1881,3 +1880,198 @@ SELECT * from self;
 # Clean up after the test.
 statement ok
 DROP TABLE self;
+
+subtest UpdateCascade_TwoTableLoop
+### Delete cascade loop between two tables
+# loop_a <- loop_b
+# loop_b <- loop_a
+
+statement ok
+CREATE TABLE loop_a (
+  id STRING PRIMARY KEY
+);
+
+statement ok
+CREATE TABLE loop_b (
+  id STRING PRIMARY KEY REFERENCES loop_a ON UPDATE CASCADE
+);
+
+statement ok
+INSERT INTO loop_a VALUES ('original');
+
+statement ok
+INSERT INTO loop_b VALUES ('original');
+
+statement ok
+ALTER TABLE loop_a ADD CONSTRAINT cascade_update_constraint
+  FOREIGN KEY (id) REFERENCES loop_b
+  ON UPDATE CASCADE;
+
+statement ok
+UPDATE loop_a SET id = 'updated' WHERE id = 'original';
+
+query T
+SELECT * FROM loop_a
+----
+updated
+
+query T
+SELECT * FROM loop_b
+----
+updated
+
+statement ok
+UPDATE loop_b SET id = 'original' WHERE id = 'updated';
+
+query T
+SELECT * FROM loop_a
+----
+original
+
+query T
+SELECT * FROM loop_b
+----
+original
+
+# Clean up after the test.
+statement ok
+DROP TABLE loop_a CASCADE;
+
+statement ok
+DROP TABLE loop_b;
+
+subtest UpdateCascade_DoubleSelfReference
+### Update cascade double self reference
+# self_x2 (x) <- (y)
+# self_x2 (y) <- (z)
+
+statement ok
+CREATE TABLE self_x2 (
+  x STRING PRIMARY KEY
+ ,y STRING UNIQUE REFERENCES self_x2(x) ON UPDATE CASCADE
+ ,z STRING REFERENCES self_x2(y) ON UPDATE CASCADE
+);
+
+statement ok
+INSERT INTO self_x2 (x, y, z) VALUES ('pk1', NULL, NULL);
+
+statement ok
+INSERT INTO self_x2 (x, y, z) VALUES ('pk2', 'pk1', NULL);
+
+statement ok
+INSERT INTO self_x2 (x, y, z) VALUES ('pk3', 'pk2', 'pk1');
+
+# ON UPDATE CASCADE
+statement ok
+UPDATE self_x2 SET x = 'pk1-updated' WHERE x = 'pk1';
+
+statement ok
+UPDATE self_x2 SET x = 'pk2-updated' WHERE x = 'pk2';
+
+statement ok
+UPDATE self_x2 SET x = 'pk3-updated' WHERE x = 'pk3';
+
+query TTT
+SELECT * FROM self_x2
+----
+pk1-updated NULL NULL
+pk2-updated pk1-updated NULL
+pk3-updated pk2-updated pk1-updated
+
+# Clean up after the test.
+statement ok
+DROP TABLE self_x2;
+
+subtest UpdateCascade_TwoUpdates
+## Update cascade two updates to the same table
+#         a
+#        / \
+#       b   c
+#       |   |
+#       |   d
+#        \ /
+#         e
+statement ok
+CREATE TABLE a (
+  id STRING PRIMARY KEY
+);
+
+statement ok
+CREATE TABLE b (
+  id STRING PRIMARY KEY REFERENCES a ON UPDATE CASCADE
+);
+
+statement ok
+CREATE TABLE c (
+  id STRING PRIMARY KEY REFERENCES a ON UPDATE CASCADE
+);
+
+statement ok
+CREATE TABLE d (
+  id STRING PRIMARY KEY REFERENCES c ON UPDATE CASCADE
+);
+
+statement ok
+CREATE TABLE e (
+  b_id STRING PRIMARY KEY REFERENCES b ON UPDATE CASCADE
+ ,d_id STRING REFERENCES d ON UPDATE CASCADE
+);
+
+statement ok
+INSERT INTO a (id) VALUES ('original');
+
+statement ok
+INSERT INTO b (id) VALUES ('original');
+
+statement ok
+INSERT INTO c (id) VALUES ('original');
+
+statement ok
+INSERT INTO d (id) VALUES ('original');
+
+statement ok
+INSERT INTO e (b_id, d_id) VALUES ('original', 'original');
+
+statement ok
+UPDATE a SET id = 'updated' WHERE id = 'original';
+
+query T
+SELECT * FROM a
+----
+updated
+
+query T
+SELECT * FROM b
+----
+updated
+
+query T
+SELECT * FROM c
+----
+updated
+
+query T
+SELECT * FROM d
+----
+updated
+
+query TT
+SELECT * FROM e
+----
+updated updated
+
+# Clean up after the test.
+statement ok
+DROP TABLE e;
+
+statement ok
+DROP TABLE d;
+
+statement ok
+DROP TABLE c;
+
+statement ok
+DROP TABLE b;
+
+statement ok
+DROP TABLE a;

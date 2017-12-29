@@ -113,7 +113,7 @@ func (ti *tableInserter) init(txn *client.Txn, _ *mon.BytesMonitor) error {
 func (ti *tableInserter) row(
 	ctx context.Context, values tree.Datums, traceKV bool,
 ) (tree.Datums, error) {
-	return nil, ti.ri.InsertRow(ctx, ti.b, values, false, traceKV)
+	return nil, ti.ri.InsertRow(ctx, ti.b, values, false, sqlbase.CheckFKs, traceKV)
 }
 
 func (ti *tableInserter) finalize(ctx context.Context, _ bool) (*sqlbase.RowContainer, error) {
@@ -373,7 +373,7 @@ func (tu *tableUpserter) row(
 			return nil, fmt.Errorf("UPSERT/ON CONFLICT DO UPDATE command cannot affect row a second time")
 		}
 		tu.fastPathKeys[string(primaryKey)] = struct{}{}
-		err = tu.ri.InsertRow(ctx, tu.fastPathBatch, row, true, traceKV)
+		err = tu.ri.InsertRow(ctx, tu.fastPathBatch, row, true, sqlbase.CheckFKs, traceKV)
 		if err != nil {
 			return nil, err
 		}
@@ -434,7 +434,7 @@ func (tu *tableUpserter) flush(
 		existingRow := existingRows[i]
 
 		if existingRow == nil {
-			err := tu.ri.InsertRow(ctx, b, insertRow, false, traceKV)
+			err := tu.ri.InsertRow(ctx, b, insertRow, false, sqlbase.CheckFKs, traceKV)
 			if err != nil {
 				return nil, err
 			}
