@@ -270,11 +270,73 @@ type fkBatchChecker struct {
 	// to the baseFKHelper that created it.
 	batchIdxToFk []*baseFKHelper
 	txn          *client.Txn
+
+	// indexChecks is used to accumulate index checks that will be added when
+	// runCheck is called.
+	// TODO(bram): Consider turning these into maps to not repeat.
+	insertIndexChecks []*baseFKHelper
+	deleteIndexChecks []*baseFKHelper
 }
 
 func (f *fkBatchChecker) reset() {
 	f.batch.Reset()
 	f.batchIdxToFk = f.batchIdxToFk[:0]
+	f.insertIndexChecks = f.insertIndexChecks[:0]
+	f.deleteIndexChecks = f.deleteIndexChecks[:0]
+}
+
+func (f *fkBatchChecker) addInsertIndexChecks(
+	fksHelpers []baseFKHelper,
+) {
+	for i := range fksHelpers {
+		f.insertIndexChecks = append(f.insertIndexChecks, &fksHelpers[i])
+	}
+}
+
+func (f *fkBatchChecker) addDeleteIndexChecks(
+	fksHelpers []baseFKHelper,
+) {
+	for i := range fksHelpers {
+		f.deleteIndexChecks = append(f.deleteIndexChecks, &fksHelpers[i])
+	}
+}
+
+// addIndexCheck adds all the indexChecks based off a list baseFKHelpers. This
+// should generally be used internally to the checker to add both insert and
+// delete index checks.
+func (f *fkBatchChecker) addIndexChecks(
+	ctx context.Context, row tree.Datums, indexChecks []*baseFKHelper,
+) error {
+	if len(indexChecks) > 0 && row == nil {
+		return pgerror.NewError(pgerror.CodeInternalError,
+			"programming error: adding in check with nil data",
+		)
+	}
+	log.Warningf(ctx, "********** %+v %s", indexChecks, row)
+	for _, fk := range indexChecks {
+		if fk.searchTable.Name == "customer reviews" {
+			continue
+		}
+		log.Warningf(ctx, "********** %s %s %s", fk.searchTable.Name, fk.searchIdx.Name, row)
+		nulls := true
+		for _, colID := range fk.searchIdx.ColumnIDs[:fk.prefixLen] {
+			found, ok := fk.ids[colID]
+			if !ok {
+				panic(fmt.Sprintf("fk ids (%v) missing column id %d", fk.ids, colID))
+			}
+			if row[found] != tree.DNull {
+				nulls = false
+				break
+			}
+		}
+		if nulls {
+			continue
+		}
+		if err := f.addCheck(row, fk); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // addCheck adds a check for the given row and baseFKHelper to the batch.
@@ -288,6 +350,7 @@ func (f *fkBatchChecker) addCheck(row tree.Datums, source *baseFKHelper) error {
 	r.MustSetInner(&scan)
 	f.batch.Requests = append(f.batch.Requests, r)
 	f.batchIdxToFk = append(f.batchIdxToFk, source)
+	log.Warningf(context.TODO(), "*********** %s", scan.Key)
 	return nil
 }
 
@@ -300,6 +363,15 @@ func (f *fkBatchChecker) addCheck(row tree.Datums, source *baseFKHelper) error {
 func (f *fkBatchChecker) runCheck(
 	ctx context.Context, oldRow tree.Datums, newRow tree.Datums,
 ) error {
+	log.Warningf(ctx, "********* running checks %s -> %s", oldRow, newRow)
+	// Add in all outstanding index checks.
+	if err := f.addIndexChecks(ctx, oldRow, f.deleteIndexChecks); err != nil {
+		return err
+	}
+	if err := f.addIndexChecks(ctx, newRow, f.insertIndexChecks); err != nil {
+		return err
+	}
+
 	if len(f.batch.Requests) == 0 {
 		return nil
 	}
@@ -398,10 +470,8 @@ func (h fkInsertHelper) checkAll(ctx context.Context, row tree.Datums) error {
 	if len(h.fks) == 0 {
 		return nil
 	}
-	for idx := range h.fks {
-		if err := checkIdx(ctx, h.checker, h.fks, idx, row); err != nil {
-			return err
-		}
+	for _, fkHelpers := range h.fks {
+		h.checker.addInsertIndexChecks(fkHelpers)
 	}
 	return h.checker.runCheck(ctx, nil, row)
 }
@@ -414,35 +484,6 @@ func (h fkInsertHelper) CollectSpans() roachpb.Spans {
 // CollectSpansForValues implements the FkSpanCollector interface.
 func (h fkInsertHelper) CollectSpansForValues(values tree.Datums) (roachpb.Spans, error) {
 	return collectSpansForValuesWithFKMap(h.fks, values)
-}
-
-func checkIdx(
-	ctx context.Context,
-	checker *fkBatchChecker,
-	fks map[IndexID][]baseFKHelper,
-	idx IndexID,
-	row tree.Datums,
-) error {
-	for i, fk := range fks[idx] {
-		nulls := true
-		for _, colID := range fk.searchIdx.ColumnIDs[:fk.prefixLen] {
-			found, ok := fk.ids[colID]
-			if !ok {
-				panic(fmt.Sprintf("fk ids (%v) missing column id %d", fk.ids, colID))
-			}
-			if row[found] != tree.DNull {
-				nulls = false
-				break
-			}
-		}
-		if nulls {
-			continue
-		}
-		if err := checker.addCheck(row, &fks[idx][i]); err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 type fkDeleteHelper struct {
@@ -494,10 +535,11 @@ func (h fkDeleteHelper) checkAll(ctx context.Context, row tree.Datums) error {
 	if len(h.fks) == 0 {
 		return nil
 	}
-	for idx := range h.fks {
-		if err := checkIdx(ctx, h.checker, h.fks, idx, row); err != nil {
-			return err
-		}
+	//for idx := range h.fks {
+	//	h.checker.addDeleteIndexChecks(h.fks[idx])
+	//}
+	for _, fkHelpers := range h.fks {
+		h.checker.addDeleteIndexChecks(fkHelpers)
 	}
 	return h.checker.runCheck(ctx, row, nil /* newRow */)
 }
@@ -540,10 +582,9 @@ func makeFKUpdateHelper(
 func (fks fkUpdateHelper) checkIdx(
 	ctx context.Context, idx IndexID, oldValues, newValues tree.Datums,
 ) error {
-	if err := checkIdx(ctx, fks.checker, fks.inbound.fks, idx, oldValues); err != nil {
-		return err
-	}
-	return checkIdx(ctx, fks.checker, fks.outbound.fks, idx, newValues)
+	fks.checker.addDeleteIndexChecks(fks.inbound.fks[idx])
+	fks.checker.addInsertIndexChecks(fks.outbound.fks[idx])
+	return nil
 }
 
 // CollectSpans implements the FkSpanCollector interface.
