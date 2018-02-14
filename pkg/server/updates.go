@@ -251,6 +251,14 @@ func (s *Server) getReportingInfo(ctx context.Context) *diagnosticspb.Diagnostic
 	n := s.node.recorder.GetStatusSummary(ctx)
 	info.Node = diagnosticspb.NodeInfo{NodeID: s.node.Descriptor.NodeID}
 
+	// Add in the localities.
+	for _, tier := range s.node.Descriptor.Locality.Tiers {
+		info.Node.Locality.Tiers = append(info.Node.Locality.Tiers, roachpb.Tier{
+			Key:   sql.HashAppName(tier.Key),
+			Value: sql.HashAppName(tier.Value),
+		})
+	}
+
 	info.Stores = make([]diagnosticspb.StoreInfo, len(n.StoreStatuses))
 	for i, r := range n.StoreStatuses {
 		info.Stores[i].NodeID = r.Desc.Node.NodeID
