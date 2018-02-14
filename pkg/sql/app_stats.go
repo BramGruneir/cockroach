@@ -283,10 +283,10 @@ func (e *Executor) GetScrubbedStmtStats() []roachpb.CollectedStatementStatistics
 	e.sqlStats.Lock()
 	for appName, a := range e.sqlStats.apps {
 		if cap(ret) == 0 {
-			// guesitmate that we'll need apps*(queries-per-app).
+			// guesstimate that we'll need apps*(queries-per-app).
 			ret = make([]roachpb.CollectedStatementStatistics, 0, len(a.stmts)*len(e.sqlStats.apps))
 		}
-		hashedApp := HashAppName(appName)
+		hashedApp := HashForReporting(appName)
 		a.Lock()
 		for q, stats := range a.stmts {
 			scrubbed, ok := scrubStmtStatKey(vt, q.stmt)
@@ -315,11 +315,11 @@ func (e *Executor) GetScrubbedStmtStats() []roachpb.CollectedStatementStatistics
 	return ret
 }
 
-// HashAppName 1-way hashes an application names for use in stat reporting.
-func HashAppName(appName string) string {
+// HashForReporting 1-way hashes a value for use in stat reporting.
+func HashForReporting(value string) string {
 	hash := fnv.New64a()
 
-	if _, err := hash.Write([]byte(appName)); err != nil {
+	if _, err := hash.Write([]byte(value)); err != nil {
 		panic(errors.Wrap(err, `"It never returns an error." -- https://golang.org/pkg/hash`))
 	}
 	return strconv.Itoa(int(hash.Sum64()))

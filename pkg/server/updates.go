@@ -254,8 +254,8 @@ func (s *Server) getReportingInfo(ctx context.Context) *diagnosticspb.Diagnostic
 	// Add in the localities.
 	for _, tier := range s.node.Descriptor.Locality.Tiers {
 		info.Node.Locality.Tiers = append(info.Node.Locality.Tiers, roachpb.Tier{
-			Key:   sql.HashAppName(tier.Key),
-			Value: sql.HashAppName(tier.Value),
+			Key:   sql.HashForReporting(tier.Key),
+			Value: sql.HashForReporting(tier.Value),
 		})
 	}
 
