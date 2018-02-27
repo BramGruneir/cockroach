@@ -420,6 +420,8 @@ func (r *distSQLReceiver) Push(
 		r.row = make(tree.Datums, len(r.resultToStreamColMap))
 	}
 	for i, resIdx := range r.resultToStreamColMap {
+		log.Warningf(context.TODO(), "****** %+v", r.outputTypes[resIdx])
+		log.Flush()
 		err := row[resIdx].EnsureDecoded(&r.outputTypes[resIdx], &r.alloc)
 		if err != nil {
 			r.resultWriter.SetError(err)

@@ -187,7 +187,7 @@ func (ed *EncDatum) EnsureDecoded(typ *ColumnType, a *DatumAlloc) error {
 		return nil
 	}
 	if ed.encoded == nil {
-		panic("decoding unset EncDatum")
+		panic(fmt.Sprintf("decoding unset EncDatum: %+v", ed))
 	}
 	datType := typ.ToDatumType()
 	var err error
