@@ -134,7 +134,7 @@ func (w *HistogramRegistry) Tick(fn func(HistogramTick)) {
 	now := timeutil.Now()
 	sort.Strings(names)
 	for _, name := range names {
-		mergedHist := merged[name]
+		mergedHist, ok := merged[name]
 		if _, ok := w.cumulative[name]; !ok {
 			w.cumulative[name] = newHistogram()
 		}
