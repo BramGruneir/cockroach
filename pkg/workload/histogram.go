@@ -146,7 +146,7 @@ func (w *HistogramRegistry) Tick(fn func(HistogramTick)) {
 
 	sort.Strings(names)
 	for _, name := range names {
-		mergedHist := merged[name]
+		mergedHist, ok := merged[name]
 		if _, ok := w.cumulative[name]; !ok {
 			w.cumulative[name] = hdrhistogram.New(
 				minLatency.Nanoseconds(), maxLatency.Nanoseconds(), sigFigs)
