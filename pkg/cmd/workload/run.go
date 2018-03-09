@@ -104,8 +104,10 @@ func cmdHelper(
 
 	return handleErrs(func(cmd *cobra.Command, args []string) error {
 		if h, ok := gen.(workload.Hookser); ok {
-			if err := h.Hooks().Validate(); err != nil {
-				return err
+			if h.Hooks().Validate != nil {
+				if err := h.Hooks().Validate(); err != nil {
+					return errors.Wrapf(err, "could not validate")
+				}
 			}
 		}
 
@@ -173,16 +175,16 @@ func runInit(gen workload.Generator, urls []string, dbName string) error {
 func runInitImpl(gen workload.Generator, initDB *gosql.DB, dbName string) error {
 	if *drop {
 		if _, err := initDB.Exec(`DROP DATABASE IF EXISTS ` + dbName); err != nil {
-			return err
+			return errors.Wrapf(err, "could not drop database %s", dbName)
 		}
 	}
 	if _, err := initDB.Exec(`CREATE DATABASE IF NOT EXISTS ` + dbName); err != nil {
-		return err
+		return errors.Wrapf(err, "could not create database %s", dbName)
 	}
 
 	const batchSize = -1
 	_, err := workload.Setup(initDB, gen, batchSize)
-	return err
+	return errors.Wrap(err, "could not setup")
 }
 
 func runRun(gen workload.Generator, urls []string, dbName string) error {

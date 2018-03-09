@@ -240,7 +240,7 @@ func Setup(db *gosql.DB, gen Generator, batchSize int) (int64, error) {
 
 	if hooks.PreLoad != nil {
 		if err := hooks.PreLoad(db); err != nil {
-			return 0, err
+			return 0, errors.Wrapf(err, "could not preload")
 		}
 	}
 
@@ -278,7 +278,7 @@ func Setup(db *gosql.DB, gen Generator, batchSize int) (int64, error) {
 
 	if hooks.PostLoad != nil {
 		if err := hooks.PostLoad(db); err != nil {
-			return 0, err
+			return 0, errors.Wrapf(err, "could not postload")
 		}
 	}
 

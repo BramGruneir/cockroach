@@ -13,6 +13,7 @@ import (
 	gosql "database/sql"
 	"fmt"
 	"math/rand"
+	"strings"
 	"time"
 
 	"github.com/pkg/errors"
@@ -27,8 +28,6 @@ import (
 
 // These need to be kept in sync with the zones used when --geo is passed
 // to roachprod.
-//
-// TODO(benesch): avoid hardcoding these.
 var zones = []string{"east", "west"}
 
 const (
@@ -120,8 +119,9 @@ UPSERT INTO system.locations VALUES
 `
 )
 
-type cross struct {
-	flags workload.Flags
+type crossccl struct {
+	flags     workload.Flags
+	connFlags *workload.ConnFlags
 
 	seed int64
 
@@ -143,15 +143,16 @@ type cross struct {
 }
 
 func init() {
-	workload.Register(crossMeta)
+	workload.Register(crosscclMeta)
 }
 
-var crossMeta = workload.Meta{
-	Name:        `CrossCountry`,
-	Description: `CrossCountry models an example workload with customers locked in either east or west`,
+var crosscclMeta = workload.Meta{
+	Name:        `crossccl`,
+	Description: `crossccl models an example workload with customers locked in either east or west`,
+	Version:     `1.0.0`,
 	New: func() workload.Generator {
-		c := &cross{}
-		c.flags.FlagSet = pflag.NewFlagSet(`cross`, pflag.ContinueOnError)
+		c := &crossccl{}
+		c.flags.FlagSet = pflag.NewFlagSet(`crossccl`, pflag.ContinueOnError)
 		c.flags.Int64Var(&c.seed, `seed`, 0, `Key hash seed.`)
 		c.flags.IntVar(&c.sessions, `sessions`, defaultSessions, `Initial number of sessions in users table.`)
 		c.flags.IntVar(&c.customersPerSession, `customersPerSession`, defaultCustomersPerSession, `Number of customers per session.`)
@@ -165,30 +166,31 @@ var crossMeta = workload.Meta{
 		c.flags.IntVar(&c.retrieveLocalPercent, `retrieveLocalPercent`, defaultRetrieveLocalPercent, `Percent (0-100) of Retrive operations that should be local.`)
 		c.flags.IntVar(&c.updateLocalPercent, `updateLocalPercent`, defaultUpdateLocalPercent, `Percent (0-100) of Update operations that should be local.`)
 		c.flags.BoolVar(&c.east, `east`, true, `Is this location in the east (true) or west (false)`)
+		c.connFlags = workload.NewConnFlags(&c.flags)
 		return c
 	},
 }
 
 // Meta implements the Generator interface.
-func (*cross) Meta() workload.Meta { return crossMeta }
+func (*crossccl) Meta() workload.Meta { return crosscclMeta }
 
 // Flags implements the Flagser interface.
-func (c *cross) Flags() workload.Flags { return c.flags }
+func (c *crossccl) Flags() workload.Flags { return c.flags }
 
 // Hooks implements the Hookser interface.
-func (c *cross) Hooks() workload.Hooks {
+func (c *crossccl) Hooks() workload.Hooks {
 	return workload.Hooks{
 		PreLoad: func(db *gosql.DB) error {
 			if _, err := db.Exec(zoneLocationsStmt); err != nil {
 				return err
 			}
 			if _, err := db.Exec(
-				"ALTER PARTITION east OF TABLE sessions EXPERIMENTAL CONFIGURE ZONE 'constraints: [+zone=us-east1-b]'",
+				"ALTER PARTITION west OF TABLE sessions EXPERIMENTAL CONFIGURE ZONE 'experimental_lease_preferences: [[+zone=us-west1-b]]'",
 			); err != nil {
 				return errors.Wrapf(err, "could not set zone for partition east")
 			}
 			if _, err := db.Exec(
-				"ALTER PARTITION west OF TABLE sessions EXPERIMENTAL CONFIGURE ZONE 'constraints: [+zone=us-west1-b]'",
+				"ALTER PARTITION east OF TABLE sessions EXPERIMENTAL CONFIGURE ZONE 'experimental_lease_preferences: [[+zone=us-east1-b]]'",
 			); err != nil {
 				return errors.Wrapf(err, "could not set zone for partition west")
 			}
@@ -197,7 +199,7 @@ func (c *cross) Hooks() workload.Hooks {
 	}
 }
 
-func (c *cross) generateSessionID(rowID int) string {
+func (c *crossccl) generateSessionID(rowID int) string {
 	largeID := uint128.Uint128{Lo: uint64(rowID)}
 	id := uuid.FromUint128(largeID)
 	if (rowID % 100) > c.eastPercent {
@@ -207,7 +209,7 @@ func (c *cross) generateSessionID(rowID int) string {
 }
 
 // Tables implements the Generator interface.
-func (c *cross) Tables() []workload.Table {
+func (c *crossccl) Tables() []workload.Table {
 	rng := rand.New(rand.NewSource(c.seed))
 	sessions := workload.Table{
 		Name:            `sessions`,
@@ -291,7 +293,7 @@ func (c *cross) Tables() []workload.Table {
 	return []workload.Table{sessions, customers, devices, variants, parameters}
 }
 
-func (c *cross) createRandomSessionID(rng *rand.Rand, east bool) string {
+func (c *crossccl) createRandomSessionID(rng *rand.Rand, east bool) string {
 	id, err := uuid.FromBytes(randutil.RandBytes(rng, 16))
 	if err != nil {
 		panic(err)
@@ -376,7 +378,7 @@ SET f = $1, updated = now()
 WHERE id = $2
 `
 
-func (c *cross) pickLocality(rng *rand.Rand, percent int) bool {
+func (c *crossccl) pickLocality(rng *rand.Rand, percent int) bool {
 	localRand := rng.Intn(100)
 	if localRand < percent {
 		return c.east
@@ -385,169 +387,184 @@ func (c *cross) pickLocality(rng *rand.Rand, percent int) bool {
 }
 
 // Ops implements the Opser interface.
-func (c *cross) Ops() workload.Operations {
-	return workload.Operations{
-		Name: `fetch one user's orders`,
-		Fn: func(sqlDB *gosql.DB, reg *workload.HistogramRegistry) (func(context.Context) error, error) {
-			hists := reg.GetHandle()
-			rng := rand.New(rand.NewSource(time.Now().UnixNano()))
-			return func(ctx context.Context) error {
-				opRand := rng.Intn(100)
-				if opRand < c.insertPercent {
-					// Insert
-
-					sessionID := c.createRandomSessionID(rng, c.pickLocality(rng, c.insertLocalPercent))
-					start1 := timeutil.Now()
-					if _, err := sqlDB.ExecContext(ctx, insertQuery1,
-						sessionID,                           // ID
-						string(randutil.RandBytes(rng, 50)), // a
-						string(randutil.RandBytes(rng, 50)), // b
-						string(randutil.RandBytes(rng, 20)), // c
-						string(randutil.RandBytes(rng, 20)), // d
-						string(randutil.RandBytes(rng, 50)), // e
-						string(randutil.RandBytes(rng, 10)), // f
-					); err != nil {
-						return errors.Wrapf(err, "error running %s", insertQuery1)
-					}
-					hists.Get(`insertQuery1`).Record(timeutil.Since(start1))
-
-					start2 := timeutil.Now()
-					if _, err := sqlDB.ExecContext(ctx, insertQuery2,
-						sessionID,                           // session_id
-						fmt.Sprint(rng.Int63()),             // id
-						string(randutil.RandBytes(rng, 50)), // a
-					); err != nil {
-						return errors.Wrapf(err, "error running %s", insertQuery2)
-					}
-					hists.Get(`insertQuery2`).Record(timeutil.Since(start2))
-
-					start3 := timeutil.Now()
-					if _, err := sqlDB.ExecContext(ctx, insertQuery3,
-						sessionID,                           // session_id
-						fmt.Sprint(rng.Int63()),             // id
-						string(randutil.RandBytes(rng, 50)), // a
-					); err != nil {
-						return errors.Wrapf(err, "error running %s", insertQuery3)
-					}
-					hists.Get(`insertQuery3`).Record(timeutil.Since(start3))
-					hists.Get(`insert`).Record(timeutil.Since(start1))
-				} else if opRand < c.insertPercent+c.retrievePercent {
-					// Retrieve
-					// First we have to find a random id to retrieve.
-					start0 := timeutil.Now()
-					var sessionID string
-					for {
-						randomSessionID := c.createRandomSessionID(rng, c.pickLocality(rng, c.retrieveLocalPercent))
-						err := sqlDB.QueryRowContext(ctx, retrieveQuery0, randomSessionID).Scan(&sessionID)
-						if err == nil {
-							break
-						}
-						if err == gosql.ErrNoRows {
-							continue
-						}
-						return errors.Wrapf(err, "error running %s", retrieveQuery0)
-					}
-					hists.Get(`retrieveQuery0`).Record(timeutil.Since(start0))
-
-					start1 := timeutil.Now()
-					if _, err := sqlDB.ExecContext(ctx, retrieveQuery1, sessionID); err != nil {
-						return errors.Wrapf(err, "error running %s", retrieveQuery1)
-					}
-					hists.Get(`retrieveQuery1`).Record(timeutil.Since(start1))
-
-					start2 := timeutil.Now()
-					if _, err := sqlDB.ExecContext(ctx, retrieveQuery2, sessionID); err != nil {
-						return errors.Wrapf(err, "error running %s", retrieveQuery2)
-					}
-					hists.Get(`retrieveQuery2`).Record(timeutil.Since(start2))
-
-					start3 := timeutil.Now()
-					if _, err := sqlDB.ExecContext(ctx, retrieveQuery3, sessionID); err != nil {
-						return errors.Wrapf(err, "error running %s", retrieveQuery3)
-					}
-					hists.Get(`retrieveQuery3`).Record(timeutil.Since(start3))
-
-					start4 := timeutil.Now()
-					if _, err := sqlDB.ExecContext(ctx, retrieveQuery4, sessionID); err != nil {
-						return errors.Wrapf(err, "error running %s", retrieveQuery4)
-					}
-					hists.Get(`retrieveQuery4`).Record(timeutil.Since(start4))
-
-					start5 := timeutil.Now()
-					if _, err := sqlDB.ExecContext(ctx, retrieveQuery5, sessionID); err != nil {
-						return errors.Wrapf(err, "error running %s", retrieveQuery5)
-					}
-					hists.Get(`retrieveQuery5`).Record(timeutil.Since(start5))
-
-					start6 := timeutil.Now()
-					if _, err := sqlDB.ExecContext(ctx, retrieveQuery6, sessionID); err != nil {
-						return errors.Wrapf(err, "error running %s", retrieveQuery6)
-					}
-					hists.Get(`retrieveQuery6`).Record(timeutil.Since(start6))
-
-					hists.Get(`retrieve`).Record(timeutil.Since(start1))
-				} else {
-					// Update
-
-					// First we have to find a random id to retrieve.
-					start0 := timeutil.Now()
-					var sessionID string
-					for {
-						randomSessionID := c.createRandomSessionID(rng, c.pickLocality(rng, c.updateLocalPercent))
-						err := sqlDB.QueryRowContext(ctx, updateQuery0, randomSessionID).Scan(&sessionID)
-						if err == nil {
-							break
-						}
-						if err == gosql.ErrNoRows {
-							continue
-						}
-						return errors.Wrapf(err, "error running %s", updateQuery0)
-					}
-					hists.Get(`updateQuery0`).Record(timeutil.Since(start0))
-
-					start1 := timeutil.Now()
-					if _, err := sqlDB.ExecContext(ctx, updateQuery1, sessionID); err != nil {
-						return errors.Wrapf(err, "error running %s", updateQuery1)
-					}
-					hists.Get(`updateQuery1`).Record(timeutil.Since(start1))
-
-					start2 := timeutil.Now()
-					if _, err := sqlDB.ExecContext(ctx, updateQuery2, sessionID); err != nil {
-						return errors.Wrapf(err, "error running %s", updateQuery2)
-					}
-					hists.Get(`updateQuery2`).Record(timeutil.Since(start2))
-
-					start3 := timeutil.Now()
-					if _, err := sqlDB.ExecContext(ctx, updateQuery3, sessionID); err != nil {
-						return errors.Wrapf(err, "error running %s", updateQuery3)
-					}
-					hists.Get(`updateQuery3`).Record(timeutil.Since(start3))
-
-					start4 := timeutil.Now()
-					if _, err := sqlDB.ExecContext(ctx, updateQuery4, sessionID); err != nil {
-						return errors.Wrapf(err, "error running %s", updateQuery4)
-					}
-					hists.Get(`updateQuery4`).Record(timeutil.Since(start4))
-
-					start5 := timeutil.Now()
-					if _, err := sqlDB.ExecContext(ctx, updateQuery5, sessionID); err != nil {
-						return errors.Wrapf(err, "error running %s", updateQuery5)
-					}
-					hists.Get(`updateQuery5`).Record(timeutil.Since(start5))
-
-					start6 := timeutil.Now()
-					if _, err := sqlDB.ExecContext(ctx, updateQuery6,
-						string(randutil.RandBytes(rng, 10)),
-						sessionID,
-					); err != nil {
-						return errors.Wrapf(err, "error running %s", updateQuery6)
-					}
-					hists.Get(`updateQuery6`).Record(timeutil.Since(start6))
-
-					hists.Get(`update`).Record(timeutil.Since(start1))
-				}
-				return nil
-			}, nil
-		},
+func (c *crossccl) Ops(
+	urls []string, reg *workload.HistogramRegistry,
+) (workload.QueryLoad, error) {
+	sqlDatabase, err := workload.SanitizeUrls(c, c.connFlags.DBOverride, urls)
+	if err != nil {
+		return workload.QueryLoad{}, err
 	}
+	db, err := gosql.Open(`cockroach`, strings.Join(urls, ` `))
+	if err != nil {
+		return workload.QueryLoad{}, err
+	}
+	// Allow a maximum of concurrency+1 connections to the database.
+	db.SetMaxOpenConns(c.connFlags.Concurrency + 1)
+	db.SetMaxIdleConns(c.connFlags.Concurrency + 1)
+
+	ql := workload.QueryLoad{SQLDatabase: sqlDatabase}
+	hists := reg.GetHandle()
+
+	for i := 0; i < c.connFlags.Concurrency; i++ {
+		rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+		workerFn := func(ctx context.Context) error {
+			opRand := rng.Intn(100)
+			if opRand < c.insertPercent {
+				// Insert
+
+				sessionID := c.createRandomSessionID(rng, c.pickLocality(rng, c.insertLocalPercent))
+				start1 := timeutil.Now()
+				if _, err := db.ExecContext(ctx, insertQuery1,
+					sessionID,                           // ID
+					string(randutil.RandBytes(rng, 50)), // a
+					string(randutil.RandBytes(rng, 50)), // b
+					string(randutil.RandBytes(rng, 20)), // c
+					string(randutil.RandBytes(rng, 20)), // d
+					string(randutil.RandBytes(rng, 50)), // e
+					string(randutil.RandBytes(rng, 10)), // f
+				); err != nil {
+					return errors.Wrapf(err, "error running %s", insertQuery1)
+				}
+				hists.Get(`insertQuery1`).Record(timeutil.Since(start1))
+
+				start2 := timeutil.Now()
+				if _, err := db.ExecContext(ctx, insertQuery2,
+					sessionID,                           // session_id
+					fmt.Sprint(rng.Int63()),             // id
+					string(randutil.RandBytes(rng, 50)), // a
+				); err != nil {
+					return errors.Wrapf(err, "error running %s", insertQuery2)
+				}
+				hists.Get(`insertQuery2`).Record(timeutil.Since(start2))
+
+				start3 := timeutil.Now()
+				if _, err := db.ExecContext(ctx, insertQuery3,
+					sessionID,                           // session_id
+					fmt.Sprint(rng.Int63()),             // id
+					string(randutil.RandBytes(rng, 50)), // a
+				); err != nil {
+					return errors.Wrapf(err, "error running %s", insertQuery3)
+				}
+				hists.Get(`insertQuery3`).Record(timeutil.Since(start3))
+				hists.Get(`insert`).Record(timeutil.Since(start1))
+			} else if opRand < c.insertPercent+c.retrievePercent {
+				// Retrieve
+				// First we have to find a random id to retrieve.
+				start0 := timeutil.Now()
+				var sessionID string
+				for {
+					randomSessionID := c.createRandomSessionID(rng, c.pickLocality(rng, c.retrieveLocalPercent))
+					err := db.QueryRowContext(ctx, retrieveQuery0, randomSessionID).Scan(&sessionID)
+					if err == nil {
+						break
+					}
+					if err == gosql.ErrNoRows {
+						continue
+					}
+					return errors.Wrapf(err, "error running %s", retrieveQuery0)
+				}
+				hists.Get(`retrieveQuery0`).Record(timeutil.Since(start0))
+
+				start1 := timeutil.Now()
+				if _, err := db.ExecContext(ctx, retrieveQuery1, sessionID); err != nil {
+					return errors.Wrapf(err, "error running %s", retrieveQuery1)
+				}
+				hists.Get(`retrieveQuery1`).Record(timeutil.Since(start1))
+
+				start2 := timeutil.Now()
+				if _, err := db.ExecContext(ctx, retrieveQuery2, sessionID); err != nil {
+					return errors.Wrapf(err, "error running %s", retrieveQuery2)
+				}
+				hists.Get(`retrieveQuery2`).Record(timeutil.Since(start2))
+
+				start3 := timeutil.Now()
+				if _, err := db.ExecContext(ctx, retrieveQuery3, sessionID); err != nil {
+					return errors.Wrapf(err, "error running %s", retrieveQuery3)
+				}
+				hists.Get(`retrieveQuery3`).Record(timeutil.Since(start3))
+
+				start4 := timeutil.Now()
+				if _, err := db.ExecContext(ctx, retrieveQuery4, sessionID); err != nil {
+					return errors.Wrapf(err, "error running %s", retrieveQuery4)
+				}
+				hists.Get(`retrieveQuery4`).Record(timeutil.Since(start4))
+
+				start5 := timeutil.Now()
+				if _, err := db.ExecContext(ctx, retrieveQuery5, sessionID); err != nil {
+					return errors.Wrapf(err, "error running %s", retrieveQuery5)
+				}
+				hists.Get(`retrieveQuery5`).Record(timeutil.Since(start5))
+
+				start6 := timeutil.Now()
+				if _, err := db.ExecContext(ctx, retrieveQuery6, sessionID); err != nil {
+					return errors.Wrapf(err, "error running %s", retrieveQuery6)
+				}
+				hists.Get(`retrieveQuery6`).Record(timeutil.Since(start6))
+
+				hists.Get(`retrieve`).Record(timeutil.Since(start1))
+			} else {
+				// Update
+
+				// First we have to find a random id to retrieve.
+				start0 := timeutil.Now()
+				var sessionID string
+				for {
+					randomSessionID := c.createRandomSessionID(rng, c.pickLocality(rng, c.updateLocalPercent))
+					err := db.QueryRowContext(ctx, updateQuery0, randomSessionID).Scan(&sessionID)
+					if err == nil {
+						break
+					}
+					if err == gosql.ErrNoRows {
+						continue
+					}
+					return errors.Wrapf(err, "error running %s", updateQuery0)
+				}
+				hists.Get(`updateQuery0`).Record(timeutil.Since(start0))
+
+				start1 := timeutil.Now()
+				if _, err := db.ExecContext(ctx, updateQuery1, sessionID); err != nil {
+					return errors.Wrapf(err, "error running %s", updateQuery1)
+				}
+				hists.Get(`updateQuery1`).Record(timeutil.Since(start1))
+
+				start2 := timeutil.Now()
+				if _, err := db.ExecContext(ctx, updateQuery2, sessionID); err != nil {
+					return errors.Wrapf(err, "error running %s", updateQuery2)
+				}
+				hists.Get(`updateQuery2`).Record(timeutil.Since(start2))
+
+				start3 := timeutil.Now()
+				if _, err := db.ExecContext(ctx, updateQuery3, sessionID); err != nil {
+					return errors.Wrapf(err, "error running %s", updateQuery3)
+				}
+				hists.Get(`updateQuery3`).Record(timeutil.Since(start3))
+
+				start4 := timeutil.Now()
+				if _, err := db.ExecContext(ctx, updateQuery4, sessionID); err != nil {
+					return errors.Wrapf(err, "error running %s", updateQuery4)
+				}
+				hists.Get(`updateQuery4`).Record(timeutil.Since(start4))
+
+				start5 := timeutil.Now()
+				if _, err := db.ExecContext(ctx, updateQuery5, sessionID); err != nil {
+					return errors.Wrapf(err, "error running %s", updateQuery5)
+				}
+				hists.Get(`updateQuery5`).Record(timeutil.Since(start5))
+
+				start6 := timeutil.Now()
+				if _, err := db.ExecContext(ctx, updateQuery6,
+					string(randutil.RandBytes(rng, 10)),
+					sessionID,
+				); err != nil {
+					return errors.Wrapf(err, "error running %s", updateQuery6)
+				}
+				hists.Get(`updateQuery6`).Record(timeutil.Since(start6))
+
+				hists.Get(`update`).Record(timeutil.Since(start1))
+			}
+			return nil
+		}
+		ql.WorkerFns = append(ql.WorkerFns, workerFn)
+	}
+	return ql, nil
 }
