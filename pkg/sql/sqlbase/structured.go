@@ -34,6 +34,7 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/types"
 	"github.com/cockroachdb/cockroach/pkg/util/encoding"
 	"github.com/cockroachdb/cockroach/pkg/util/interval"
+	"github.com/cockroachdb/cockroach/pkg/util/log"
 )
 
 // ID, ColumnID, FamilyID, and IndexID are all uint32, but are each given a
@@ -860,6 +861,7 @@ func (desc *TableDescriptor) allocateColumnFamilyIDs(columnNames map[string]Colu
 // Validate validates that the table descriptor is well formed. Checks include
 // both single table and cross table invariants.
 func (desc *TableDescriptor) Validate(ctx context.Context, txn *client.Txn) error {
+	log.Warningf(ctx, "************* validate: %s", desc.Name)
 	err := desc.ValidateTable()
 	if err != nil {
 		return err

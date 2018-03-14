@@ -186,6 +186,9 @@ NULL               /1                 {1}       1
 
 
 statement ok
+SELECT 1
+
+statement ok
 CREATE TABLE t1 (k INT PRIMARY KEY, v1 INT, v2 INT, v3 INT)
 
 statement ok

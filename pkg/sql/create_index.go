@@ -22,6 +22,7 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/sql/privilege"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/tree"
 	"github.com/cockroachdb/cockroach/pkg/sql/sqlbase"
+	"github.com/cockroachdb/cockroach/pkg/util/log"
 )
 
 type createIndexNode struct {
@@ -34,6 +35,7 @@ type createIndexNode struct {
 //   notes: postgres requires CREATE on the table.
 //          mysql requires INDEX on the table.
 func (p *planner) CreateIndex(ctx context.Context, n *tree.CreateIndex) (planNode, error) {
+	log.Warningf(ctx, "******* CREATE INDEX %s", n.Name)
 	tn, err := n.Table.Normalize()
 	if err != nil {
 		return nil, err

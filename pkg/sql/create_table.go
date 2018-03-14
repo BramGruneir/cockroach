@@ -34,6 +34,7 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/sql/sqlbase"
 	"github.com/cockroachdb/cockroach/pkg/util"
 	"github.com/cockroachdb/cockroach/pkg/util/hlc"
+	"github.com/cockroachdb/cockroach/pkg/util/log"
 	"github.com/pkg/errors"
 )
 
@@ -49,6 +50,7 @@ type createTableNode struct {
 // Privileges: CREATE on database.
 //   Notes: postgres/mysql require CREATE on database.
 func (p *planner) CreateTable(ctx context.Context, n *tree.CreateTable) (planNode, error) {
+	log.Warningf(ctx, "********* CREATE TABLE %s", n.Table)
 	tn, err := n.Table.Normalize()
 	if err != nil {
 		return nil, err
