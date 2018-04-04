@@ -106,6 +106,10 @@ func TestTypeCheck(t *testing.T) {
 		{`1:::DECIMAL + $1`, `1:::DECIMAL + $1:::DECIMAL`},
 		{`$1:::INT`, `$1:::INT`},
 
+		{`(((1,2)).x) = 3`, `((1:::INT, 2:::INT)).x = 3:::INT`},
+		{`((('a','b')).x) = 'c'`, `(('a':::STRING, 'b':::STRING)).x = 'c':::STRING`},
+		{`(((1,'a')).x) = 3`, `((1:::INT, 'a':::STRING)).x = 3:::INT`},
+
 		// These outputs, while bizarre looking, are correct and expected. The
 		// type annotation is caused by the call to tree.Serialize, which formats the
 		// output using the Parseable formatter which inserts type annotations
@@ -178,6 +182,7 @@ func TestTypeCheckError(t *testing.T) {
 		{`ANNOTATE_TYPE('a', int)`, `could not parse "a" as type int`},
 		{`ANNOTATE_TYPE(ANNOTATE_TYPE(1, int), decimal)`, `incompatible type annotation for ANNOTATE_TYPE(1, INT) as decimal, found type: int`},
 		{`3:::int[]`, `incompatible type annotation for 3 as int[], found type: int`},
+		{`(3).*`, `type int is not composite`},
 	}
 	for _, d := range testData {
 		expr, err := parser.ParseExpr(d.expr)

@@ -15,6 +15,7 @@
 package tree
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"time"
@@ -26,6 +27,7 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/sql/pgwire/pgerror"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/types"
 	"github.com/cockroachdb/cockroach/pkg/sql/sessiondata"
+	"github.com/cockroachdb/cockroach/pkg/util/log"
 )
 
 // SemaContext defines the context in which to perform semantic analysis on an
@@ -389,6 +391,65 @@ func (expr *CollateExpr) TypeCheck(ctx *SemaContext, desired types.T) (TypedExpr
 }
 
 // TypeCheck implements the Expr interface.
+func (expr *ColumnAccessExpr) TypeCheck(ctx *SemaContext, desired types.T) (TypedExpr, error) {
+	log.Warningf(context.TODO(), "columnaccessexpr")
+
+	subExpr, err := expr.Expr.TypeCheck(ctx, types.Any)
+	if err != nil {
+		return nil, err
+	}
+	expr.Expr = subExpr
+	resolvedType := subExpr.ResolvedType()
+
+	log.Warningf(context.TODO(), "******** resolvedType: %+v", resolvedType)
+
+	if !resolvedType.FamilyEqual(types.FamTuple) {
+		return nil, pgerror.NewErrorf(pgerror.CodeDatatypeMismatchError,
+			"type %s is not composite", resolvedType)
+	}
+
+	if expr.Star {
+		expr.typ = subExpr.ResolvedType()
+		return expr, nil
+	}
+
+	log.Warningf(context.TODO(), "******** desired: %s", desired)
+
+	// Try to see if we can match the desired type. This is not a perfect check as
+	// we don't know which element was selected.
+	if desired != types.Any {
+		for _, subType := range expr.Expr.(*Tuple).types {
+			log.Warningf(context.TODO(), "******** subtype:%s", subType)
+			if subType == desired {
+				expr.typ = subType
+				return expr, nil
+			}
+		}
+
+		return nil, pgerror.NewErrorf(pgerror.CodeDatatypeMismatchError,
+			"type %s is not available as part of the tuple %s", desired, resolvedType)
+	}
+
+	// If all the types of the tuple are of the same type, than this should
+	// return that type.
+	singleType := true
+	allTupleTypes := expr.Expr.(*Tuple).types
+	for i := 1; i < len(allTupleTypes); i++ {
+		if allTupleTypes[0] != allTupleTypes[i] {
+			singleType = false
+			break
+		}
+	}
+	if singleType {
+		expr.typ = allTupleTypes[0]
+		return expr, nil
+	}
+
+	expr.typ = types.Unknown
+	return expr, nil
+}
+
+// TypeCheck implements the Expr interface.
 func (expr *CoalesceExpr) TypeCheck(ctx *SemaContext, desired types.T) (TypedExpr, error) {
 	typedSubExprs, retType, err := TypeCheckSameTypedExprs(ctx, desired, expr.Exprs...)
 	if err != nil {
@@ -447,6 +508,7 @@ var (
 
 // TypeCheck implements the Expr interface.
 func (expr *FuncExpr) TypeCheck(ctx *SemaContext, desired types.T) (TypedExpr, error) {
+	log.Warningf(context.TODO(), "funcexpr")
 	var searchPath sessiondata.SearchPath
 	if ctx != nil {
 		searchPath = ctx.SearchPath
@@ -780,6 +842,7 @@ func (expr *StrVal) TypeCheck(ctx *SemaContext, desired types.T) (TypedExpr, err
 
 // TypeCheck implements the Expr interface.
 func (expr *Tuple) TypeCheck(ctx *SemaContext, desired types.T) (TypedExpr, error) {
+	log.Warningf(context.TODO(), "tuple!")
 	expr.types = make(types.TTuple, len(expr.Exprs))
 	for i, subExpr := range expr.Exprs {
 		desiredElem := types.Any

@@ -3238,6 +3238,11 @@ func (expr *CollateExpr) Eval(ctx *EvalContext) (Datum, error) {
 }
 
 // Eval implements the TypedExpr interface.
+func (expr *ColumnAccessExpr) Eval(ctx *EvalContext) (Datum, error) {
+	panic("Eval")
+}
+
+// Eval implements the TypedExpr interface.
 func (expr *CoalesceExpr) Eval(ctx *EvalContext) (Datum, error) {
 	for _, e := range expr.Exprs {
 		d, err := e.(TypedExpr).Eval(ctx)
