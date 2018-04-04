@@ -554,10 +554,10 @@ a 3
 subtest 24866
 
 # TODO(bram): #24866
-# query I colnames
-# SELECT (i.keys).n FROM (SELECT information_schema._pg_expandarray(ARRAY[3,2,1]) AS keys) AS i;
-# ----
-# n
-# 3
-# 2
-# 1
+query I colnames
+SELECT (i.keys).n FROM (SELECT information_schema._pg_expandarray(ARRAY[3,2,1]) AS keys) AS i;
+----
+n
+3
+2
+1

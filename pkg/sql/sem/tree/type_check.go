@@ -15,6 +15,7 @@
 package tree
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"time"
@@ -26,6 +27,7 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/sql/pgwire/pgerror"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/types"
 	"github.com/cockroachdb/cockroach/pkg/sql/sessiondata"
+	"github.com/cockroachdb/cockroach/pkg/util/log"
 )
 
 // SemaContext defines the context in which to perform semantic analysis on an
@@ -390,8 +392,52 @@ func (expr *CollateExpr) TypeCheck(ctx *SemaContext, desired types.T) (TypedExpr
 
 // TypeCheck implements the Expr interface.
 func (expr *ColumnAccessExpr) TypeCheck(ctx *SemaContext, desired types.T) (TypedExpr, error) {
-	return nil, pgerror.NewErrorf(pgerror.CodeInternalError,
-		"programmer error: column access expressions must be replaced before type checking")
+	//return nil, pgerror.NewErrorf(pgerror.CodeInternalError,
+	//	"programmer error: column access expressions must be replaced before type checking")
+
+	log.Warningf(context.TODO(), "\n\n******** expr: %s", expr)
+
+	subExpr, err := expr.Expr.TypeCheck(ctx, types.Any)
+	if err != nil {
+		return nil, err
+	}
+	expr.Expr = subExpr
+	resolvedType := subExpr.ResolvedType()
+
+	log.Warningf(context.TODO(), "******** resolvedType: %s", resolvedType)
+
+	isTuple := resolvedType.FamilyEqual(types.FamTuple)
+	if !isTuple && !resolvedType.FamilyEqual(types.FamTable) {
+		return nil, pgerror.NewErrorf(pgerror.CodeDatatypeMismatchError,
+			"type %s is not composite  ??", resolvedType)
+	}
+
+	if expr.Star {
+		expr.typ = subExpr.ResolvedType()
+		return expr, nil
+	}
+
+	// We can only use a tuple type with a *.
+	if isTuple {
+		return nil, pgerror.NewErrorf(pgerror.CodeDatatypeMismatchError,
+			"type %s is not composite", resolvedType)
+	}
+
+	table := resolvedType.(types.TTable)
+
+	log.Warningf(context.TODO(), "******** desired: %s", desired)
+	log.Warningf(context.TODO(), "******** tuple types: %s", table.Cols)
+	log.Warningf(context.TODO(), "******** tuple labels: %s", table.Labels)
+
+	for i, label := range table.Labels {
+		if label == expr.ColName {
+			expr.typ = table.Cols.Types[i]
+			return expr, nil
+		}
+	}
+
+	return nil, pgerror.NewErrorf(pgerror.CodeDatatypeMismatchError,
+		"could not identify column '%s' in type %s", expr.ColName, resolvedType)
 }
 
 // TypeCheck implements the Expr interface.

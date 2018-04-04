@@ -336,6 +336,11 @@ func (t TTuple) String() string {
 				buf.WriteString(", ")
 			}
 			buf.WriteString(typ.String())
+			if t.Labels != nil {
+				buf.WriteString(" AS '")
+				buf.WriteString(t.Labels[i])
+				buf.WriteByte('\'')
+			}
 		}
 		buf.WriteByte('}')
 	}

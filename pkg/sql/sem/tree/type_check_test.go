@@ -106,6 +106,25 @@ func TestTypeCheck(t *testing.T) {
 		{`1:::DECIMAL + $1`, `1:::DECIMAL + $1:::DECIMAL`},
 		{`$1:::INT`, `$1:::INT`},
 
+		{`((1,2)).*`, `((1:::INT, 2:::INT)).*`},                  // Basic composite type
+		{`(((1,'a')).*)`, `((1:::INT, 'a':::STRING)).*`},         // Mixed composite type with extra parens
+		{`((ARRAY[]:::int[],1)).*`, `((ARRAY[], 1:::INT)).*`},    // Mixed composite type with array
+		{`((unnest(ARRAY[]:::int[])).*)`, `(unnest(ARRAY[])).*`}, // Table type that returns a tuple with one element
+		{
+			`(information_schema._pg_expandarray(ARRAY[]:::int[])).*`,
+			`(information_schema._pg_expandarray(ARRAY[])).*`,
+		}, // Table type that returns a tuple with two elements
+		{`(unnest(ARRAY[1, 2, 3])).unnest`, `(unnest(ARRAY[1:::INT, 2:::INT, 3:::INT])).unnest`}, // with an accessor
+		{`((unnest(ARRAY[]:::int[])).unnest)`, `(unnest(ARRAY[])).unnest`},                       // with an accessor and empty array
+		{
+			`(information_schema._pg_expandarray(ARRAY['a', 'b', 'c'])).x`,
+			`(information_schema._pg_expandarray(ARRAY['a':::STRING, 'b':::STRING, 'c':::STRING])).x`,
+		}, // Table type that returns a tuple with two elements
+		{
+			`(information_schema._pg_expandarray(ARRAY['a', 'b', 'c'])).n`,
+			`(information_schema._pg_expandarray(ARRAY['a':::STRING, 'b':::STRING, 'c':::STRING])).n`,
+		}, // Table type that returns a tuple with two elements
+
 		// These outputs, while bizarre looking, are correct and expected. The
 		// type annotation is caused by the call to tree.Serialize, which formats the
 		// output using the Parseable formatter which inserts type annotations
@@ -178,6 +197,20 @@ func TestTypeCheckError(t *testing.T) {
 		{`ANNOTATE_TYPE('a', int)`, `could not parse "a" as type int`},
 		{`ANNOTATE_TYPE(ANNOTATE_TYPE(1, int), decimal)`, `incompatible type annotation for ANNOTATE_TYPE(1, INT) as decimal, found type: int`},
 		{`3:::int[]`, `incompatible type annotation for 3 as int[], found type: int`},
+		{`(3).*`, `type int is not composite`},                                       // value is not a tuple
+		{`((1,2)).x = 3`, `tuple{int, int} is not composite`},                        // a tuple of ints without labels is not composite
+		{`(((1,2)).x) = 3`, `tuple{int, int} is not composite`},                      // with an extra parens is still not composite
+		{`(('a','b')).x = 3`, `tuple{string, string} is not composite`},              // a tuple of strings without labels is not composite
+		{`((1,'a')).x = 3`, `tuple{int, string} is not composite`},                   // a mixed type tuple without labels is not composite
+		{`(((ARRAY[]:::int[],'a')).x) = 3`, `tuple{int[], string} is not composite`}, // a mixed type tuple without labels is not composite
+		{
+			`(unnest(ARRAY[1, 2, 3])).other`,
+			`could not identify column 'other' in type setof tuple{int AS 'unnest'}`,
+		}, // with an accessor that doesn't have a corresponding column
+		{
+			`(information_schema._pg_expandarray(ARRAY['a', 'b', 'c'])).o`,
+			`could not identify column 'o' in type setof tuple{string AS 'x', int AS 'n'}`,
+		}, // with an accessor that doesn't have a corresponding column
 	}
 	for _, d := range testData {
 		expr, err := parser.ParseExpr(d.expr)

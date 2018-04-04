@@ -2151,6 +2151,8 @@ func TestParsePrecedence(t *testing.T) {
 
 		// Unary ~ should have highest precedence.
 		{`~1+2`, binary(tree.Plus, unary(tree.UnaryComplement, one), two)},
+
+		// ***** SOMETHING HERE?!
 	}
 	for _, d := range testData {
 		expr, err := ParseExpr(d.sql)
