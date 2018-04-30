@@ -833,6 +833,8 @@ func (expr *StrVal) TypeCheck(ctx *SemaContext, desired types.T) (TypedExpr, err
 // TypeCheck implements the Expr interface.
 func (expr *Tuple) TypeCheck(ctx *SemaContext, desired types.T) (TypedExpr, error) {
 	expr.types = types.TTuple{Types: make([]types.T, len(expr.Exprs))}
+	if expr.Labels ************************* check len add labels
+
 	for i, subExpr := range expr.Exprs {
 		desiredElem := types.Any
 		if t, ok := desired.(types.TTuple); ok && len(t.Types) > i {

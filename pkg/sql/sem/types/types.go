@@ -336,10 +336,10 @@ func (t TTuple) String() string {
 				buf.WriteString(", ")
 			}
 			buf.WriteString(typ.String())
+			// TODO(bram/knz):
 			if t.Labels != nil {
-				buf.WriteString(" AS '")
+				buf.WriteString(" AS ")
 				buf.WriteString(t.Labels[i])
-				buf.WriteByte('\'')
 			}
 		}
 		buf.WriteByte('}')

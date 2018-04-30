@@ -696,7 +696,8 @@ func (node *Placeholder) ResolvedType() types.T {
 
 // Tuple represents a parenthesized list of expressions.
 type Tuple struct {
-	Exprs Exprs
+	Exprs  Exprs
+	Labels NameList
 	// Row indicates whether or not the tuple should be textually represented as
 	// ROW ( ... ).
 	Row bool
@@ -719,11 +720,16 @@ func NewTypedTuple(typedExprs TypedExprs) *Tuple {
 
 // Format implements the NodeFormatter interface.
 func (node *Tuple) Format(ctx *FmtCtx) {
+	if len(node.Labels) > 0 {
+		ctx.Write ... ******************************
+	}
 	if node.Row {
 		ctx.WriteString("ROW")
 	}
 	ctx.WriteByte('(')
 	ctx.FormatNode(&node.Exprs)
+
+
 	ctx.WriteByte(')')
 }
 
