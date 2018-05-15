@@ -1376,9 +1376,9 @@ alter_table_cmd:
   {
     $$.val = &tree.AlterTableDropColumn{
       ColumnKeyword: $2.bool(),
-      IfExists: true,
-      Column: tree.Name($5),
-      DropBehavior: $6.dropBehavior(),
+      IfExists:      true,
+      Column:        tree.Name($5),
+      DropBehavior:  $6.dropBehavior(),
     }
   }
   // ALTER TABLE <name> DROP [COLUMN] <colname> [RESTRICT|CASCADE]
@@ -1386,9 +1386,9 @@ alter_table_cmd:
   {
     $$.val = &tree.AlterTableDropColumn{
       ColumnKeyword: $2.bool(),
-      IfExists: false,
-      Column: tree.Name($3),
-      DropBehavior: $4.dropBehavior(),
+      IfExists:      false,
+      Column:        tree.Name($3),
+      DropBehavior:  $4.dropBehavior(),
     }
   }
   // ALTER TABLE <name> ALTER [COLUMN] <colname>
@@ -1410,7 +1410,7 @@ alter_table_cmd:
 | ADD table_constraint opt_validate_behavior
   {
     $$.val = &tree.AlterTableAddConstraint{
-      ConstraintDef: $2.constraintDef(),
+      ConstraintDef:      $2.constraintDef(),
       ValidationBehavior: $3.validationBehavior(),
     }
   }
@@ -1427,8 +1427,8 @@ alter_table_cmd:
 | DROP CONSTRAINT IF EXISTS constraint_name opt_drop_behavior
   {
     $$.val = &tree.AlterTableDropConstraint{
-      IfExists: true,
-      Constraint: tree.Name($5),
+      IfExists:     true,
+      Constraint:   tree.Name($5),
       DropBehavior: $6.dropBehavior(),
     }
   }
@@ -1436,8 +1436,8 @@ alter_table_cmd:
 | DROP CONSTRAINT constraint_name opt_drop_behavior
   {
     $$.val = &tree.AlterTableDropConstraint{
-      IfExists: false,
-      Constraint: tree.Name($3),
+      IfExists:     false,
+      Constraint:   tree.Name($3),
       DropBehavior: $4.dropBehavior(),
     }
   }
@@ -1720,9 +1720,9 @@ copy_from_stmt:
   COPY table_name opt_column_list FROM STDIN
   {
     $$.val = &tree.CopyFrom{
-       Table: $2.normalizableTableNameFromUnresolvedName(),
+       Table:   $2.normalizableTableNameFromUnresolvedName(),
        Columns: $3.nameList(),
-       Stdin: true,
+       Stdin:   true,
     }
   }
 
@@ -1880,9 +1880,9 @@ create_stats_stmt:
   CREATE STATISTICS statistics_name ON name_list FROM table_name
   {
     $$.val = &tree.CreateStats{
-      Name: tree.Name($3),
+      Name:        tree.Name($3),
       ColumnNames: $5.nameList(),
-      Table: $7.normalizableTableNameFromUnresolvedName(),
+      Table:       $7.normalizableTableNameFromUnresolvedName(),
     }
   }
 | CREATE STATISTICS error // SHOW HELP: CREATE STATISTICS
@@ -1895,10 +1895,10 @@ create_changefeed_stmt:
     // but it means something different here than SELECT and BACKUP. On the
     // other hand, RESTORE already stretches the definition a bit. Revisit.
     $$.val = &tree.CreateChangefeed{
-      Targets: $4.targetList(),
+      Targets:  $4.targetList(),
       SinkType: $6,
-      AsOf: $7.asOfClause(),
-      Options: $8.kvOptions(),
+      AsOf:     $7.asOfClause(),
+      Options:  $8.kvOptions(),
     }
   }
 
@@ -1913,11 +1913,11 @@ delete_stmt:
   opt_with_clause DELETE FROM relation_expr_opt_alias where_clause opt_sort_clause opt_limit_clause returning_clause
   {
     $$.val = &tree.Delete{
-      With: $1.with(),
-      Table: $4.tblExpr(),
-      Where: tree.NewWhere(tree.AstWhere, $5.expr()),
-      OrderBy: $6.orderBy(),
-      Limit: $7.limit(),
+      With:      $1.with(),
+      Table:     $4.tblExpr(),
+      Where:     tree.NewWhere(tree.AstWhere, $5.expr()),
+      OrderBy:   $6.orderBy(),
+      Limit:     $7.limit(),
       Returning: $8.retClause(),
     }
   }
@@ -2008,16 +2008,16 @@ drop_index_stmt:
   DROP INDEX table_name_with_index_list opt_drop_behavior
   {
     $$.val = &tree.DropIndex{
-      IndexList: $3.newTableWithIdxList(),
-      IfExists: false,
+      IndexList:    $3.newTableWithIdxList(),
+      IfExists:     false,
       DropBehavior: $4.dropBehavior(),
     }
   }
 | DROP INDEX IF EXISTS table_name_with_index_list opt_drop_behavior
   {
     $$.val = &tree.DropIndex{
-      IndexList: $5.newTableWithIdxList(),
-      IfExists: true,
+      IndexList:    $5.newTableWithIdxList(),
+      IfExists:     true,
       DropBehavior: $6.dropBehavior(),
     }
   }
@@ -2031,16 +2031,16 @@ drop_database_stmt:
   DROP DATABASE database_name opt_drop_behavior
   {
     $$.val = &tree.DropDatabase{
-      Name: tree.Name($3),
-      IfExists: false,
+      Name:         tree.Name($3),
+      IfExists:     false,
       DropBehavior: $4.dropBehavior(),
     }
   }
 | DROP DATABASE IF EXISTS database_name opt_drop_behavior
   {
     $$.val = &tree.DropDatabase{
-      Name: tree.Name($5),
-      IfExists: true,
+      Name:         tree.Name($5),
+      IfExists:     true,
       DropBehavior: $6.dropBehavior(),
     }
   }
@@ -2169,8 +2169,8 @@ prepare_stmt:
   PREPARE table_alias_name prep_type_clause AS preparable_stmt
   {
     $$.val = &tree.Prepare{
-      Name: tree.Name($2),
-      Types: $3.colTypes(),
+      Name:      tree.Name($2),
+      Types:     $3.colTypes(),
       Statement: $5.stmt(),
     }
   }
@@ -2194,7 +2194,7 @@ execute_stmt:
   EXECUTE table_alias_name execute_param_clause
   {
     $$.val = &tree.Execute{
-      Name: tree.Name($2),
+      Name:   tree.Name($2),
       Params: $3.exprs(),
     }
   }
@@ -2437,9 +2437,9 @@ scrub_table_stmt:
   EXPERIMENTAL SCRUB TABLE table_name opt_as_of_clause opt_scrub_options_clause
   {
     $$.val = &tree.Scrub{
-        Typ: tree.ScrubTable,
-        Table: $4.normalizableTableNameFromUnresolvedName(),
-        AsOf: $5.asOfClause(),
+        Typ:     tree.ScrubTable,
+        Table:   $4.normalizableTableNameFromUnresolvedName(),
+        AsOf:    $5.asOfClause(),
         Options: $6.scrubOptions(),
     }
   }
@@ -3025,10 +3025,10 @@ show_tables_stmt:
   SHOW TABLES FROM name '.' name
   {
     $$.val = &tree.ShowTables{TableNamePrefix:tree.TableNamePrefix{
-        CatalogName: tree.Name($4),
+        CatalogName:     tree.Name($4),
         ExplicitCatalog: true,
-        SchemaName: tree.Name($6),
-        ExplicitSchema: true,
+        SchemaName:      tree.Name($6),
+        ExplicitSchema:  true,
     }}
   }
 | SHOW TABLES FROM name
@@ -3036,7 +3036,7 @@ show_tables_stmt:
     $$.val = &tree.ShowTables{TableNamePrefix:tree.TableNamePrefix{
         // Note: the schema name may be interpreted as database name,
         // see name_resolution.go.
-        SchemaName: tree.Name($4),
+        SchemaName:     tree.Name($4),
         ExplicitSchema: true,
     }}
   }
@@ -3387,7 +3387,7 @@ targets:
     // of increasing (or attempting to modify) the grey magic occurring
     // here.
     $$.val = tree.TargetList{
-      Tables: tree.TablePatterns{&tree.UnresolvedName{NumParts:1, Parts: tree.NameParts{$1}}},
+      Tables:   tree.TablePatterns{&tree.UnresolvedName{NumParts:1, Parts: tree.NameParts{$1}}},
       ForRoles: $1 == "role", // backdoor for "SHOW GRANTS ON ROLE" (no name list)
     }
   }
@@ -3487,25 +3487,25 @@ create_table_stmt:
   CREATE TABLE table_name '(' opt_table_elem_list ')' opt_interleave opt_partition_by
   {
     $$.val = &tree.CreateTable{
-      Table: $3.normalizableTableNameFromUnresolvedName(),
-      IfNotExists: false,
-      Interleave: $7.interleave(),
-      Defs: $5.tblDefs(),
-      AsSource: nil,
+      Table:         $3.normalizableTableNameFromUnresolvedName(),
+      IfNotExists:   false,
+      Interleave:    $7.interleave(),
+      Defs:          $5.tblDefs(),
+      AsSource:      nil,
       AsColumnNames: nil,
-      PartitionBy: $8.partitionBy(),
+      PartitionBy:   $8.partitionBy(),
     }
   }
 | CREATE TABLE IF NOT EXISTS table_name '(' opt_table_elem_list ')' opt_interleave opt_partition_by
   {
     $$.val = &tree.CreateTable{
-      Table: $6.normalizableTableNameFromUnresolvedName(),
-      IfNotExists: true,
-      Interleave: $10.interleave(),
-      Defs: $8.tblDefs(),
-      AsSource: nil,
+      Table:         $6.normalizableTableNameFromUnresolvedName(),
+      IfNotExists:   true,
+      Interleave:    $10.interleave(),
+      Defs:          $8.tblDefs(),
+      AsSource:      nil,
       AsColumnNames: nil,
-      PartitionBy: $11.partitionBy(),
+      PartitionBy:   $11.partitionBy(),
     }
   }
 
@@ -3513,22 +3513,22 @@ create_table_as_stmt:
   CREATE TABLE table_name opt_column_list AS select_stmt
   {
     $$.val = &tree.CreateTable{
-      Table: $3.normalizableTableNameFromUnresolvedName(),
-      IfNotExists: false,
-      Interleave: nil,
-      Defs: nil,
-      AsSource: $6.slct(),
+      Table:         $3.normalizableTableNameFromUnresolvedName(),
+      IfNotExists:   false,
+      Interleave:    nil,
+      Defs:          nil,
+      AsSource:      $6.slct(),
       AsColumnNames: $4.nameList(),
     }
   }
 | CREATE TABLE IF NOT EXISTS table_name opt_column_list AS select_stmt
   {
     $$.val = &tree.CreateTable{
-      Table: $6.normalizableTableNameFromUnresolvedName(),
-      IfNotExists: true,
-      Interleave: nil,
-      Defs: nil,
-      AsSource: $9.slct(),
+      Table:         $6.normalizableTableNameFromUnresolvedName(),
+      IfNotExists:   true,
+      Interleave:    nil,
+      Defs:          nil,
+      AsSource:      $9.slct(),
       AsColumnNames: $7.nameList(),
     }
   }
@@ -3566,8 +3566,8 @@ opt_interleave:
   INTERLEAVE IN PARENT table_name '(' name_list ')' opt_interleave_drop_behavior
   {
     $$.val = &tree.InterleaveDef{
-               Parent: $4.newNormalizableTableNameFromUnresolvedName(),
-               Fields: $6.nameList(),
+               Parent:       $4.newNormalizableTableNameFromUnresolvedName(),
+               Fields:       $6.nameList(),
                DropBehavior: $8.dropBehavior(),
     }
   }
@@ -3618,14 +3618,14 @@ partition_by:
   {
     $$.val = &tree.PartitionBy{
       Fields: $5.nameList(),
-      List: $8.listPartitions(),
+      List:   $8.listPartitions(),
     }
   }
 | PARTITION BY RANGE '(' name_list ')' '(' range_partitions ')'
   {
     $$.val = &tree.PartitionBy{
       Fields: $5.nameList(),
-      Range: $8.rangePartitions(),
+      Range:  $8.rangePartitions(),
     }
   }
 | PARTITION BY NOTHING
@@ -3647,8 +3647,8 @@ list_partition:
   partition VALUES IN '(' expr_list ')' opt_partition_by
   {
     $$.val = tree.ListPartition{
-      Name: tree.UnrestrictedName($1),
-      Exprs: $5.exprs(),
+      Name:         tree.UnrestrictedName($1),
+      Exprs:        $5.exprs(),
       Subpartition: $7.partitionBy(),
     }
   }
@@ -3667,9 +3667,9 @@ range_partition:
   partition VALUES FROM '(' expr_list ')' TO '(' expr_list ')' opt_partition_by
   {
     $$.val = tree.RangePartition{
-      Name: tree.UnrestrictedName($1),
-      From: &tree.Tuple{Exprs: $5.exprs()},
-      To: &tree.Tuple{Exprs: $9.exprs()},
+      Name:         tree.UnrestrictedName($1),
+      From:         &tree.Tuple{Exprs: $5.exprs()},
+      To:           &tree.Tuple{Exprs: $9.exprs()},
       Subpartition: $11.partitionBy(),
     }
   }
@@ -3765,8 +3765,8 @@ col_qualification_elem:
 | REFERENCES table_name opt_name_parens key_match reference_actions
  {
     $$.val = &tree.ColumnFKConstraint{
-      Table: $2.normalizableTableNameFromUnresolvedName(),
-      Col: tree.Name($3),
+      Table:   $2.normalizableTableNameFromUnresolvedName(),
+      Col:     tree.Name($3),
       Actions: $5.referenceActions(),
     }
  }
@@ -3788,10 +3788,10 @@ index_def:
   INDEX opt_index_name '(' index_params ')' opt_storing opt_interleave opt_partition_by
   {
     $$.val = &tree.IndexTableDef{
-      Name:    tree.Name($2),
-      Columns: $4.idxElems(),
-      Storing: $6.nameList(),
-      Interleave: $7.interleave(),
+      Name:        tree.Name($2),
+      Columns:     $4.idxElems(),
+      Storing:     $6.nameList(),
+      Interleave:  $7.interleave(),
       PartitionBy: $8.partitionBy(),
     }
   }
@@ -3799,10 +3799,10 @@ index_def:
   {
     $$.val = &tree.UniqueConstraintTableDef{
       IndexTableDef: tree.IndexTableDef {
-        Name:    tree.Name($3),
-        Columns: $5.idxElems(),
-        Storing: $7.nameList(),
-        Interleave: $8.interleave(),
+        Name:        tree.Name($3),
+        Columns:     $5.idxElems(),
+        Storing:     $7.nameList(),
+        Interleave:  $8.interleave(),
         PartitionBy: $9.partitionBy(),
       },
     }
@@ -3810,8 +3810,8 @@ index_def:
 | INVERTED INDEX opt_name '(' index_params ')'
   {
     $$.val = &tree.IndexTableDef{
-      Name:    tree.Name($3),
-      Columns: $5.idxElems(),
+      Name:     tree.Name($3),
+      Columns:  $5.idxElems(),
       Inverted: true,
     }
   }
@@ -3820,7 +3820,7 @@ family_def:
   FAMILY opt_family_name '(' name_list ')'
   {
     $$.val = &tree.FamilyTableDef{
-      Name: tree.Name($2),
+      Name:    tree.Name($2),
       Columns: $4.nameList(),
     }
   }
@@ -3850,9 +3850,9 @@ constraint_elem:
   {
     $$.val = &tree.UniqueConstraintTableDef{
       IndexTableDef: tree.IndexTableDef{
-        Columns: $3.idxElems(),
-        Storing: $5.nameList(),
-        Interleave: $6.interleave(),
+        Columns:     $3.idxElems(),
+        Storing:     $5.nameList(),
+        Interleave:  $6.interleave(),
         PartitionBy: $7.partitionBy(),
       },
     }
@@ -3863,17 +3863,17 @@ constraint_elem:
       IndexTableDef: tree.IndexTableDef{
         Columns: $4.idxElems(),
       },
-      PrimaryKey:    true,
+      PrimaryKey: true,
     }
   }
 | FOREIGN KEY '(' name_list ')' REFERENCES table_name
     opt_column_list key_match reference_actions
   {
     $$.val = &tree.ForeignKeyConstraintTableDef{
-      Table: $7.normalizableTableNameFromUnresolvedName(),
+      Table:    $7.normalizableTableNameFromUnresolvedName(),
       FromCols: $4.nameList(),
-      ToCols: $8.nameList(),
-      Actions: $10.referenceActions(),
+      ToCols:   $8.nameList(),
+      Actions:  $10.referenceActions(),
     }
   }
 
@@ -4007,7 +4007,7 @@ create_sequence_stmt:
   CREATE SEQUENCE sequence_name opt_sequence_option_list
   {
     node := &tree.CreateSequence{
-      Name: $3.normalizableTableNameFromUnresolvedName(),
+      Name:    $3.normalizableTableNameFromUnresolvedName(),
       Options: $4.seqOpts(),
     }
     $$.val = node
@@ -4015,8 +4015,8 @@ create_sequence_stmt:
 | CREATE SEQUENCE IF NOT EXISTS sequence_name opt_sequence_option_list
   {
     node := &tree.CreateSequence{
-      Name: $6.normalizableTableNameFromUnresolvedName(),
-      Options: $7.seqOpts(),
+      Name:        $6.normalizableTableNameFromUnresolvedName(),
+      Options:     $7.seqOpts(),
       IfNotExists: true,
     }
     $$.val = node
@@ -4114,9 +4114,9 @@ create_view_stmt:
   CREATE VIEW view_name opt_column_list AS select_stmt
   {
     $$.val = &tree.CreateView{
-      Name: $3.normalizableTableNameFromUnresolvedName(),
+      Name:        $3.normalizableTableNameFromUnresolvedName(),
       ColumnNames: $4.nameList(),
-      AsSource: $6.slct(),
+      AsSource:    $6.slct(),
     }
   }
 | CREATE VIEW error // SHOW HELP: CREATE VIEW
@@ -4139,14 +4139,14 @@ create_index_stmt:
   CREATE opt_unique INDEX opt_index_name ON table_name opt_using_gin '(' index_params ')' opt_storing opt_interleave opt_partition_by
   {
     $$.val = &tree.CreateIndex{
-      Name:    tree.Name($4),
-      Table:   $6.normalizableTableNameFromUnresolvedName(),
-      Unique:  $2.bool(),
-      Columns: $9.idxElems(),
-      Storing: $11.nameList(),
-      Interleave: $12.interleave(),
+      Name:        tree.Name($4),
+      Table:       $6.normalizableTableNameFromUnresolvedName(),
+      Unique:      $2.bool(),
+      Columns:     $9.idxElems(),
+      Storing:     $11.nameList(),
+      Interleave:  $12.interleave(),
       PartitionBy: $13.partitionBy(),
-      Inverted: $7.bool(),
+      Inverted:    $7.bool(),
     }
   }
 | CREATE opt_unique INDEX IF NOT EXISTS index_name ON table_name opt_using_gin '(' index_params ')' opt_storing opt_interleave opt_partition_by
@@ -4158,9 +4158,9 @@ create_index_stmt:
       IfNotExists: true,
       Columns:     $12.idxElems(),
       Storing:     $14.nameList(),
-      Interleave: $15.interleave(),
+      Interleave:  $15.interleave(),
       PartitionBy: $16.partitionBy(),
-      Inverted: $10.bool(),
+      Inverted:    $10.bool(),
     }
   }
 | CREATE INVERTED INDEX opt_index_name ON table_name '(' index_params ')'
@@ -4554,22 +4554,22 @@ create_database_stmt:
   CREATE DATABASE database_name opt_with opt_template_clause opt_encoding_clause opt_lc_collate_clause opt_lc_ctype_clause
   {
     $$.val = &tree.CreateDatabase{
-      Name: tree.Name($3),
+      Name:     tree.Name($3),
       Template: $5,
       Encoding: $6,
-      Collate: $7,
-      CType: $8,
+      Collate:  $7,
+      CType:    $8,
     }
   }
 | CREATE DATABASE IF NOT EXISTS database_name opt_with opt_template_clause opt_encoding_clause opt_lc_collate_clause opt_lc_ctype_clause
   {
     $$.val = &tree.CreateDatabase{
       IfNotExists: true,
-      Name: tree.Name($6),
-      Template: $8,
-      Encoding: $9,
-      Collate: $10,
-      CType: $11,
+      Name:        tree.Name($6),
+      Template:    $8,
+      Encoding:    $9,
+      Collate:     $10,
+      CType:       $11,
     }
    }
 | CREATE DATABASE error // SHOW HELP: CREATE DATABASE
@@ -4770,12 +4770,12 @@ update_stmt:
     SET set_clause_list update_from_clause where_clause opt_sort_clause opt_limit_clause returning_clause
   {
     $$.val = &tree.Update{
-      With: $1.with(),
-      Table: $3.tblExpr(),
-      Exprs: $5.updateExprs(),
-      Where: tree.NewWhere(tree.AstWhere, $7.expr()),
-      OrderBy: $8.orderBy(),
-      Limit: $9.limit(),
+      With:      $1.with(),
+      Table:     $3.tblExpr(),
+      Exprs:     $5.updateExprs(),
+      Where:     tree.NewWhere(tree.AstWhere, $7.expr()),
+      OrderBy:   $8.orderBy(),
+      Limit:     $9.limit(),
       Returning: $10.retClause(),
     }
   }
@@ -5438,11 +5438,11 @@ table_ref:
                  Expr: &tree.TableRef{
                     TableID: $2.int64(),
                     Columns: $3.tableRefCols(),
-                    As: $4.aliasClause(),
+                    As:      $4.aliasClause(),
                  },
-                 Hints: $6.indexHints(),
+                 Hints:      $6.indexHints(),
                  Ordinality: $7.bool(),
-                 As: $8.aliasClause(),
+                 As:         $8.aliasClause(),
              }
   }
 | relation_expr opt_index_hints opt_ordinality opt_alias_clause
@@ -6506,10 +6506,10 @@ a_expr:
       return 1
     }
     $$.val = &tree.ComparisonExpr{
-      Operator: op,
+      Operator:    op,
       SubOperator: subOpCmp,
-      Left: $1.expr(),
-      Right: $4.expr(),
+      Left:        $1.expr(),
+      Right:       $4.expr(),
     }
   }
 | DEFAULT
@@ -6660,7 +6660,7 @@ c_expr:
 | d_expr array_subscripts
   {
     $$.val = &tree.IndirectionExpr{
-      Expr: $1.expr(),
+      Expr:        $1.expr(),
       Indirection: $2.arraySubscripts(),
     }
   }
@@ -7016,9 +7016,9 @@ window_specification:
     opt_sort_clause opt_frame_clause ')'
   {
     $$.val = &tree.WindowDef{
-      RefName: tree.Name($2),
+      RefName:    tree.Name($2),
       Partitions: $3.exprs(),
-      OrderBy: $4.orderBy(),
+      OrderBy:    $4.orderBy(),
     }
   }
 
@@ -7451,7 +7451,7 @@ table_name_with_index:
     // This case allows specifying just an index name (potentially schema-qualified).
     // We temporarily store the index name in Table (see tree.TableNameWithIndex).
     $$.val = tree.TableNameWithIndex{
-        Table: $1.normalizableTableNameFromUnresolvedName(),
+        Table:       $1.normalizableTableNameFromUnresolvedName(),
         SearchTable: true,
     }
   }
