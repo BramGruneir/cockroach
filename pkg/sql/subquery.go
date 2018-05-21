@@ -72,6 +72,7 @@ var execModeNames = map[subqueryExecMode]string{
 // EvalSubquery is called by `tree.Eval()` method implementations to
 // retrieve the Datum result of a subquery.
 func (p *planner) EvalSubquery(expr *tree.Subquery) (result tree.Datum, err error) {
+	log.Warningf(context.TODO(), "**** doeval: %s", expr)
 	if expr.Idx == 0 {
 		return nil, pgerror.NewErrorf(pgerror.CodeInternalError,
 			"programming error: subquery %q was not processed, analyzeSubqueries not called?", expr)
@@ -90,6 +91,7 @@ func (p *planner) EvalSubquery(expr *tree.Subquery) (result tree.Datum, err erro
 }
 
 func (p *planTop) evalSubqueries(params runParams) error {
+	log.Warningf(context.TODO(), "**** doeval: %s", params)
 	for i := range p.subqueryPlans {
 		sq := &p.subqueryPlans[i]
 		if sq.started {
@@ -122,6 +124,8 @@ func (p *planTop) evalSubqueries(params runParams) error {
 func (s *subquery) doEval(params runParams) (result tree.Datum, err error) {
 	// After evaluation, there is no plan remaining.
 	defer func() { s.plan.Close(params.ctx); s.plan = nil }()
+
+	log.Warningf(context.TODO(), "**** doeval: %s", params)
 
 	switch s.execMode {
 	case execModeExists:

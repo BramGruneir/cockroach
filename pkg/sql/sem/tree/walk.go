@@ -16,11 +16,13 @@ package tree
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"reflect"
 	"strings"
 
 	"github.com/cockroachdb/cockroach/pkg/sql/pgwire/pgerror"
+	"github.com/cockroachdb/cockroach/pkg/util/log"
 )
 
 // Visitor defines methods that are called for nodes during an expression or statement walk.
@@ -455,12 +457,14 @@ func walkKVOptions(v Visitor, opts KVOptions) (KVOptions, bool) {
 
 // Walk implements the Expr interface.
 func (expr *Tuple) Walk(v Visitor) Expr {
+	log.Warningf(context.TODO(), "**** walk: %s", expr)
 	exprs, changed := walkExprSlice(v, expr.Exprs)
 	if changed {
 		exprCopy := *expr
 		exprCopy.Exprs = exprs
 		return &exprCopy
 	}
+	log.Warningf(context.TODO(), "**** walk2: %s", expr)
 	return expr
 }
 

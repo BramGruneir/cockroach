@@ -16,12 +16,14 @@ package tree
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 
 	"github.com/cockroachdb/cockroach/pkg/sql/coltypes"
 	"github.com/cockroachdb/cockroach/pkg/sql/lex"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/types"
 	"github.com/cockroachdb/cockroach/pkg/util"
+	"github.com/cockroachdb/cockroach/pkg/util/log"
 )
 
 // Expr represents an expression.
@@ -707,6 +709,7 @@ type Tuple struct {
 
 // NewTypedTuple returns a new Tuple that is verified to be well-typed.
 func NewTypedTuple(typedExprs TypedExprs) *Tuple {
+	log.Warningf(context.TODO(), "**** newTypedTuple %s", typedExprs)
 	node := &Tuple{
 		Exprs: make(Exprs, len(typedExprs)),
 		types: types.TTuple{Types: make([]types.T, len(typedExprs))},
@@ -760,6 +763,7 @@ func (node *Tuple) Truncate(prefix int) *Tuple {
 //  Tuple:           (1, 2, 3)
 //  Project({0, 2}): (1, 3)
 func (node *Tuple) Project(set util.FastIntSet) *Tuple {
+	log.Warningf(context.TODO(), "**** project %s", node)
 	t := &Tuple{
 		Exprs: make(Exprs, 0, set.Len()),
 		Row:   node.Row,

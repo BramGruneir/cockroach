@@ -15,6 +15,7 @@
 package tree
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"time"
@@ -26,6 +27,7 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/sql/pgwire/pgerror"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/types"
 	"github.com/cockroachdb/cockroach/pkg/sql/sessiondata"
+	"github.com/cockroachdb/cockroach/pkg/util/log"
 )
 
 // SemaContext defines the context in which to perform semantic analysis on an
@@ -402,11 +404,12 @@ func (expr *ColumnAccessExpr) TypeCheck(ctx *SemaContext, desired types.T) (Type
 			"type %s is not composite", resolvedType)
 	}
 
-	// **** This should never happen, remove it!
 	if expr.Star {
 		return nil, pgerror.NewErrorf(pgerror.CodeDatatypeMismatchError,
 			"star expansion of tuples is not supported")
 	}
+
+	log.Warningf(context.TODO(), "**** resolvedType: %s", resolvedType)
 
 	// Go through all of the labels to find a match.
 	expr.ColIndex = -1
@@ -855,9 +858,8 @@ func (expr *Tuple) TypeCheck(ctx *SemaContext, desired types.T) (TypedExpr, erro
 				return nil, pgerror.NewErrorf(pgerror.CodeSyntaxError,
 					"each label in a tuple must be unique (%q)", expr.Labels,
 				)
-			} else {
-				uniqueLabels[normalizedLabel] = struct{}{}
 			}
+			uniqueLabels[normalizedLabel] = struct{}{}
 			expr.types.Labels[i] = normalizedLabel
 		}
 	}

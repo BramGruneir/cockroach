@@ -740,6 +740,13 @@ EXECUTE x((1,2,3))
 
 subtest labeled_tuple
 
+query ITB colnames
+SELECT ((t)).e, ((t)).f, ((t)).g
+FROM (
+  SELECT ((1,'2',true) AS e,f,g) AS t
+)
+----
+
 # Selecting two tuples
 query TT colnames
 SELECT ((1, 2, 'hello', NULL, NULL) AS a1, b2, c3, d4, e5), ((true, NULL, (false, 6.6, false)) AS a1, b2, c3)
@@ -834,6 +841,14 @@ SELECT (((1,'2',true) AS a,b,c)).a
 ----
 a  b  c     a  b  c
 1  2  true  1  2  true
+
+query ITB colnames
+SELECT ((t)).e, ((t)).f, ((t)).g
+FROM (
+  SELECT ((1,'2',true) AS e,f,g) AS t
+)
+----
+
 
 query error pq: each label in a tuple must be unique \(\["a" "b" "a"\]\)
 SELECT (((1,'2',true) AS a,b,a)).a
