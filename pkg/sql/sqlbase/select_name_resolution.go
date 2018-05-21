@@ -25,6 +25,7 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/tree"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/types"
 	"github.com/cockroachdb/cockroach/pkg/sql/sessiondata"
+	"github.com/cockroachdb/cockroach/pkg/util/log"
 )
 
 // NameResolutionVisitor is a tree.Visitor implementation used to
@@ -286,6 +287,70 @@ func expandStar(
 	return columns, exprs, nil
 }
 
+// ***
+func expandColumnAccessExprStar(
+	ctx context.Context,
+	src MultiSourceInfo,
+	columnAccessExpr *tree.ColumnAccessExpr,
+	ivarHelper tree.IndexedVarHelper,
+) (columns ResultColumns, exprs []tree.TypedExpr, err error) {
+	if len(src) == 0 || len(src[0].SourceColumns) == 0 {
+		return nil, nil, pgerror.NewErrorf(pgerror.CodeInvalidNameError,
+			"cannot use %q without a FROM clause", tree.ErrString(columnAccessExpr))
+	}
+
+	//columnAccessExpr.ResolvedType().(*tree.TTuple)
+
+	tuple := columnAccessExpr.Expr.(*tree.Tuple)
+	log.Warningf(ctx, "ecae*: %+v, %+v", tuple, columnAccessExpr)
+
+	for _, ds := range src {
+		for _, sc := range ds.SourceColumns {
+			log.Warningf(ctx, "------ %s, %s", sc.Name, sc.Typ)
+		}
+	}
+
+	//exprs = tuple.Exprs
+	/*for i := range tuple.Exprs {
+		columns = append(columns, ResultColumn{Name: tuple.Labels[i], Typ: tuple.Exprs[i].ResolvedType()})
+		exprs[i]
+	}*/
+
+	return columns, exprs, nil
+	/*
+		colSel := func(src *DataSourceInfo, idx int) {
+			col := src.SourceColumns[idx]
+			if !col.Hidden {
+				ivar := ivarHelper.IndexedVar(idx + src.ColOffset)
+				columns = append(columns, ResultColumn{Name: col.Name, Typ: ivar.ResolvedType()})
+				exprs = append(exprs, ivar)
+			}
+		}
+
+		switch sel := v.(type) {
+		case tree.UnqualifiedStar:
+			// Simple case: a straight '*'. Take all columns.
+			for _, ds := range src {
+				for i := 0; i < len(ds.SourceColumns); i++ {
+					colSel(ds, i)
+				}
+			}
+		case *tree.AllColumnsSelector:
+			resolver := ColumnResolver{Sources: src}
+			_, _, err := sel.Resolve(ctx, &resolver)
+			if err != nil {
+				return nil, nil, err
+			}
+			ds := src[resolver.ResolverState.SrcIdx]
+			colSet := ds.SourceAliases[resolver.ResolverState.ColSetIdx].ColumnSet
+			for i, ok := colSet.Next(0); ok; i, ok = colSet.Next(i + 1) {
+				colSel(ds, i)
+			}
+		}
+	*/
+	//return columns, exprs, nil
+}
+
 // CheckRenderStar handles the case where the target specification contains a
 // SQL star (UnqualifiedStar or AllColumnsSelector). We match the prefix of the
 // name to one of the tables in the query and then expand the "*" into a list
@@ -296,9 +361,20 @@ func CheckRenderStar(
 	info MultiSourceInfo,
 	ivarHelper tree.IndexedVarHelper,
 ) (isStar bool, columns ResultColumns, exprs []tree.TypedExpr, err error) {
+	log.Warningf(context.TODO(), "***** in star 1: target:%s")
 	v, ok := target.Expr.(tree.VarName)
 	if !ok {
-		return false, nil, nil, nil
+		// Is this a column access expr around a tuple?
+		vColAccessExpr, okColAccessExpr := target.Expr.(*tree.ColumnAccessExpr)
+		if !okColAccessExpr || !vColAccessExpr.Star {
+			return false, nil, nil, nil
+		}
+		log.Warningf(context.TODO(), "***** woo: cae:%+v", vColAccessExpr)
+		columns, exprs, err = expandColumnAccessExprStar(
+			ctx, info, vColAccessExpr, ivarHelper,
+		)
+		return true, columns, exprs, err
+		// return false, nil, nil, nil
 	}
 
 	switch v.(type) {

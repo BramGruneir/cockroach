@@ -42,6 +42,7 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/util/duration"
 	"github.com/cockroachdb/cockroach/pkg/util/hlc"
 	"github.com/cockroachdb/cockroach/pkg/util/json"
+	"github.com/cockroachdb/cockroach/pkg/util/log"
 	"github.com/cockroachdb/cockroach/pkg/util/mon"
 	"github.com/cockroachdb/cockroach/pkg/util/timeofday"
 	"github.com/cockroachdb/cockroach/pkg/util/timeutil"
@@ -3395,8 +3396,20 @@ func (expr *CollateExpr) Eval(ctx *EvalContext) (Datum, error) {
 
 // Eval implements the TypedExpr interface.
 func (expr *ColumnAccessExpr) Eval(ctx *EvalContext) (Datum, error) {
-	return nil, pgerror.NewErrorf(pgerror.CodeInternalError,
-		"programmer error: column access expressions must be replaced before evaluation")
+	log.Warningf(context.TODO(), "************** in eval: %s, %s, %s, %d", expr.ResolvedType(), expr.String, expr.Expr, expr.ColIndex)
+	d, err := expr.Expr.(TypedExpr).Eval(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	log.Warningf(context.TODO(), "************** d:%s, rt:%s", d, d.ResolvedType())
+	return d.(*DTuple).D[expr.ColIndex], nil
+
+	/*
+
+
+		return nil, pgerror.NewErrorf(pgerror.CodeInternalError,
+			"programmer error: column access expressions must be replaced before evaluation")*/
 }
 
 // Eval implements the TypedExpr interface.

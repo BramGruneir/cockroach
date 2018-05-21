@@ -20,6 +20,7 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/tree"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/types"
 	"github.com/cockroachdb/cockroach/pkg/sql/sqlbase"
+	"github.com/cockroachdb/cockroach/pkg/util/log"
 )
 
 const autoGenerateRenderOutputName = ""
@@ -62,10 +63,14 @@ func (p *planner) computeRenderAllowingStars(
 	ivarHelper tree.IndexedVarHelper,
 	outputName string,
 ) (columns sqlbase.ResultColumns, exprs []tree.TypedExpr, hasStar bool, err error) {
+	log.Warningf(ctx, "******** here 1 - %s", target.Expr)
+
 	// Pre-normalize any VarName so the work is not done twice below.
 	if err := target.NormalizeTopLevelVarName(); err != nil {
 		return nil, nil, false, err
 	}
+
+	log.Warningf(ctx, "******** here 2 - %s", target.Expr)
 
 	if hasStar, cols, typedExprs, err := sqlbase.CheckRenderStar(ctx, target, info, ivarHelper); err != nil {
 		return nil, nil, false, err
