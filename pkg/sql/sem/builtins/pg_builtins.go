@@ -22,8 +22,6 @@ import (
 	"github.com/lib/pq/oid"
 	"github.com/pkg/errors"
 
-	"bytes"
-
 	"github.com/cockroachdb/cockroach/pkg/sql/coltypes"
 
 	"github.com/cockroachdb/cockroach/pkg/sql/lex"
@@ -655,9 +653,9 @@ var pgBuiltins = map[string][]tree.Builtin{
 				 * and contains only lowercase letters, digits, and underscores, *and* is
 				 * not any SQL keyword.  Otherwise, supply quotes.
 				 */
-				var buf bytes.Buffer
-				lex.EncodeRestrictedSQLIdent(&buf, string(tree.MustBeDString(args[0])), lex.EncBareStrings)
-				return tree.NewDString(buf.String()), nil
+				var sb strings.Builder
+				lex.EncodeRestrictedSQLIdent(&sb, string(tree.MustBeDString(args[0])), lex.EncBareStrings)
+				return tree.NewDString(sb.String()), nil
 			},
 			Info: notUsableInfo,
 		},

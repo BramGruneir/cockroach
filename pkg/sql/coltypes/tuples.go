@@ -15,7 +15,7 @@
 package coltypes
 
 import (
-	"bytes"
+	"strings"
 
 	"github.com/cockroachdb/cockroach/pkg/sql/lex"
 )
@@ -25,13 +25,13 @@ import (
 type TTuple []T
 
 // Format implements the ColTypeFormatter interface.
-func (node TTuple) Format(buf *bytes.Buffer, flags lex.EncodeFlags) {
-	buf.WriteString("(")
+func (node TTuple) Format(sb *strings.Builder, flags lex.EncodeFlags) {
+	sb.WriteString("(")
 	for i := range node {
 		if i != 0 {
-			buf.WriteString(", ")
+			sb.WriteString(", ")
 		}
-		node[i].Format(buf, flags)
+		node[i].Format(sb, flags)
 	}
-	buf.WriteString(")")
+	sb.WriteString(")")
 }

@@ -15,8 +15,8 @@
 package tree
 
 import (
-	"bytes"
 	"fmt"
+	"strings"
 	"sync"
 
 	"github.com/cockroachdb/cockroach/pkg/sql/coltypes"
@@ -133,10 +133,10 @@ const (
 )
 
 // FmtCtx is suitable for passing to Format() methods.
-// It also exposes the underlying bytes.Buffer interface for
+// It also exposes the underlying strings.Builder interface for
 // convenience.
 type FmtCtx struct {
-	*bytes.Buffer
+	*strings.Builder
 	// The flags to use for pretty-printing.
 	flags FmtFlags
 	// indexedVarFormat is an optional interceptor for
@@ -152,8 +152,8 @@ type FmtCtx struct {
 }
 
 // MakeFmtCtx creates a FmtCtx from an existing buffer and flags.
-func MakeFmtCtx(buf *bytes.Buffer, f FmtFlags) FmtCtx {
-	return FmtCtx{Buffer: buf, flags: f}
+func MakeFmtCtx(sb *strings.Builder, f FmtFlags) FmtCtx {
+	return FmtCtx{Builder: sb, flags: f}
 }
 
 // WithReformatTableNames modifies FmtCtx to instructs the pretty-printer
@@ -176,15 +176,15 @@ func (ctx *FmtCtx) HasFlags(f FmtFlags) bool {
 	return ctx.flags.HasFlags(f)
 }
 
-// Printf calls fmt.Fprintf on the linked bytes.Buffer. It is provided
-// for convenience, to avoid having to call fmt.Fprintf(ctx.Buffer, ...).
+// Printf calls fmt.Fprintf on the linked strings.Builder. It is provided
+// for convenience, to avoid having to call fmt.Fprintf(ctx.Builder, ...).
 //
 // Note: DO NOT USE THIS TO INTERPOLATE %s ON NodeFormatter OBJECTS.
 // This would call the String() method on them and would fail to reuse
 // the same bytes buffer (and waste allocations). Instead use
 // ctx.FormatNode().
 func (ctx *FmtCtx) Printf(f string, args ...interface{}) {
-	fmt.Fprintf(ctx.Buffer, f, args...)
+	fmt.Fprintf(ctx.Builder, f, args...)
 }
 
 // FmtExpr returns FmtFlags that indicate how the pretty-printer
@@ -250,7 +250,7 @@ func (ctx *FmtCtx) FormatNode(n NodeFormatter) {
 				// not assigned a type yet. This should not happen, so we make
 				// it clear in the output this needs to be investigated
 				// further.
-				fmt.Fprintf(ctx.Buffer, "??? %v", te)
+				fmt.Fprintf(ctx.Builder, "??? %v", te)
 			} else {
 				ctx.WriteString(rt.String())
 			}
@@ -285,7 +285,7 @@ func (ctx *FmtCtx) FormatNode(n NodeFormatter) {
 			if err != nil {
 				panic(err)
 			}
-			colType.Format(ctx.Buffer, f.EncodeFlags())
+			colType.Format(ctx.Builder, f.EncodeFlags())
 		}
 	}
 }
@@ -325,19 +325,20 @@ func Serialize(n NodeFormatter) string {
 //
 // Users must either call Close() or CloseAndGetString().
 //
+// *********** FIX THE NAME and NOTES
 // It implements the interface of FmtCtx, which in turn implements
 // that of bytes.Buffer. Therefore, the String() method works and can
 // be used multiple times. The CloseAndGetString() method is meant to
 // combine Close() and String().
 type FmtCtxWithBuf struct {
 	FmtCtx
-	buf bytes.Buffer
+	sb strings.Builder
 }
 
 var fmtCtxWithBufPool = sync.Pool{
 	New: func() interface{} {
 		ctx := &FmtCtxWithBuf{}
-		ctx.Buffer = &ctx.buf
+		ctx.Builder = &ctx.sb
 		return ctx
 	},
 }
@@ -352,13 +353,13 @@ func NewFmtCtxWithBuf(f FmtFlags) *FmtCtxWithBuf {
 // Close releases the FmtCtxWithBuf.
 func (f *FmtCtxWithBuf) Close() {
 	f.Reset()
-	f.FmtCtx = FmtCtx{Buffer: &f.buf}
+	f.FmtCtx = FmtCtx{Builder: &f.sb}
 	fmtCtxWithBufPool.Put(f)
 }
 
 // CloseAndGetString combines Close() and String().
 func (f *FmtCtxWithBuf) CloseAndGetString() string {
-	s := f.buf.String()
+	s := f.sb.String()
 	f.Close()
 	return s
 }

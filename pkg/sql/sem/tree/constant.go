@@ -370,7 +370,7 @@ func (expr *StrVal) RawString() string {
 
 // Format implements the NodeFormatter interface.
 func (expr *StrVal) Format(ctx *FmtCtx) {
-	buf, f := ctx.Buffer, ctx.flags
+	buf, f := ctx.Builder, ctx.flags
 	if expr.bytesEsc {
 		lex.EncodeSQLBytes(buf, expr.s)
 	} else {
@@ -587,7 +587,7 @@ func (constantFolderVisitor) VisitPost(expr Expr) (retExpr Expr) {
 			}
 		case *StrVal:
 			// ComparisonExpr folding for String-like constants is not significantly different
-			// from constant evalutation during normalization (because both should be exact,
+			// from constant evaluation during normalization (because both should be exact,
 			// unlike numeric comparisons). Still, folding these comparisons when possible here
 			// can reduce the amount of work performed during type checking, can reduce necessary
 			// allocations, and maintains symmetry with numeric constants.

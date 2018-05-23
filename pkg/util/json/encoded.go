@@ -15,10 +15,10 @@
 package json
 
 import (
-	"bytes"
 	"fmt"
 	"sort"
 	"strconv"
+	"strings"
 	"unsafe"
 
 	"github.com/cockroachdb/cockroach/pkg/sql/pgwire/pgerror"
@@ -621,12 +621,12 @@ func (j *jsonEncoded) FetchValKeyOrIdx(key string) (JSON, error) {
 	return nil, nil
 }
 
-func (j *jsonEncoded) Format(buf *bytes.Buffer) {
+func (j *jsonEncoded) Format(sb *strings.Builder) {
 	decoded, err := j.decode()
 	if err != nil {
-		fmt.Fprintf(buf, `<corrupt JSON data: %s>`, err.Error())
+		fmt.Fprintf(sb, `<corrupt JSON data: %s>`, err.Error())
 	} else {
-		decoded.Format(buf)
+		decoded.Format(sb)
 	}
 }
 
@@ -679,9 +679,9 @@ func (j *jsonEncoded) Size() uintptr {
 }
 
 func (j *jsonEncoded) String() string {
-	var buf bytes.Buffer
-	j.Format(&buf)
-	return buf.String()
+	var sb strings.Builder
+	j.Format(&sb)
+	return sb.String()
 }
 
 // isScalar implements the JSON interface.

@@ -26,6 +26,7 @@ package stringencoding
 import (
 	"bytes"
 	"fmt"
+	"strings"
 	"unicode/utf8"
 )
 
@@ -82,9 +83,9 @@ func init() {
 }
 
 // EncodeEscapedChar is used internally to write out a character from a larger
-// string that needs to be escaped to a buffer.
+// string that needs to be escaped to a builder.
 func EncodeEscapedChar(
-	buf *bytes.Buffer,
+	sb *strings.Builder,
 	entireString string,
 	currentRune rune,
 	currentByte byte,
@@ -95,27 +96,27 @@ func EncodeEscapedChar(
 	if currentRune == utf8.RuneError {
 		// Errors are due to invalid unicode points, so escape the bytes.
 		// Make sure this is run at least once in case ln == -1.
-		buf.Write(HexMap[entireString[currentIdx]])
+		sb.Write(HexMap[entireString[currentIdx]])
 		for ri := 1; ri < ln; ri++ {
-			buf.Write(HexMap[entireString[currentIdx+ri]])
+			sb.Write(HexMap[entireString[currentIdx+ri]])
 		}
 	} else if ln == 1 {
 		// For single-byte runes, do the same as encodeSQLBytes.
 		if encodedChar := EncodeMap[currentByte]; encodedChar != DontEscape {
-			buf.WriteByte('\\')
-			buf.WriteByte(encodedChar)
+			sb.WriteByte('\\')
+			sb.WriteByte(encodedChar)
 		} else if currentByte == quoteChar {
-			buf.WriteByte('\\')
-			buf.WriteByte(quoteChar)
+			sb.WriteByte('\\')
+			sb.WriteByte(quoteChar)
 		} else {
 			// Escape non-printable characters.
-			buf.Write(HexMap[currentByte])
+			sb.Write(HexMap[currentByte])
 		}
 	} else if ln == 2 {
 		// For multi-byte runes, print them based on their width.
-		fmt.Fprintf(buf, `\u%04X`, currentRune)
+		fmt.Fprintf(sb, `\u%04X`, currentRune)
 	} else {
-		fmt.Fprintf(buf, `\U%08X`, currentRune)
+		fmt.Fprintf(sb, `\U%08X`, currentRune)
 	}
 }
 

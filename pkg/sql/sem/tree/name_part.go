@@ -36,7 +36,7 @@ func (n *Name) Format(ctx *FmtCtx) {
 	if f.HasFlags(FmtAnonymize) {
 		ctx.WriteByte('_')
 	} else {
-		lex.EncodeRestrictedSQLIdent(ctx.Buffer, string(*n), f.EncodeFlags())
+		lex.EncodeRestrictedSQLIdent(ctx.Builder, string(*n), f.EncodeFlags())
 	}
 }
 
@@ -85,7 +85,7 @@ func (u *UnrestrictedName) Format(ctx *FmtCtx) {
 	if f.HasFlags(FmtAnonymize) {
 		ctx.WriteByte('_')
 	} else {
-		lex.EncodeUnrestrictedSQLIdent(ctx.Buffer, string(*u), f.EncodeFlags())
+		lex.EncodeUnrestrictedSQLIdent(ctx.Builder, string(*u), f.EncodeFlags())
 	}
 }
 

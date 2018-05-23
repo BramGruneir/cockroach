@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"io"
+	"strings"
 
 	"github.com/cockroachdb/cockroach/pkg/sql/pgwire/pgwirebase"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/tree"
@@ -35,14 +36,15 @@ type writeBuffer struct {
 	err     error
 
 	// These two buffers are used as temporary storage. Use putbuf when the
-	// length of the required temp space is known. Use variablePutbuf when the length
-	// of the required temp space is unknown, or when a bytes.Buffer is needed.
+	// length of the required temp space is known. Use variablePutbuf when the
+	// length of the required temp space is unknown, or when a strings.Builder is
+	// needed.
 	//
 	// We keep both of these because there are operations that are only possible to
 	// perform (efficiently) with one or the other, such as strconv.AppendInt with
-	// putbuf or Datum.Format with variablePutbuf.
+	// putbuf or Datum.Format with variablePutSB.
 	putbuf          [64]byte
-	variablePutbuf  bytes.Buffer
+	variablePutSB   *strings.Builder
 	simpleFormatter tree.FmtCtx
 	arrayFormatter  tree.FmtCtx
 
@@ -54,10 +56,11 @@ type writeBuffer struct {
 
 func newWriteBuffer(bytecount *metric.Counter) *writeBuffer {
 	b := &writeBuffer{
-		bytecount: bytecount,
+		bytecount:     bytecount,
+		variablePutSB: &strings.Builder{},
 	}
-	b.simpleFormatter = tree.MakeFmtCtx(&b.variablePutbuf, tree.FmtSimple)
-	b.arrayFormatter = tree.MakeFmtCtx(&b.variablePutbuf, tree.FmtArrays)
+	b.simpleFormatter = tree.MakeFmtCtx(b.variablePutSB, tree.FmtSimple)
+	b.arrayFormatter = tree.MakeFmtCtx(b.variablePutSB, tree.FmtArrays)
 	return b
 }
 
@@ -91,15 +94,18 @@ func (b *writeBuffer) nullTerminate() {
 	}
 }
 
-// writeLengthPrefixedVariablePutbuf writes the current contents of
-// variablePutbuf with a length prefix. The function will reset
-// variablePutbuf.
-func (b *writeBuffer) writeLengthPrefixedVariablePutbuf() {
+// writeLengthPrefixedVariablePutSB writes the current contents of
+// variablePutSB with a length prefix. The function will reset variablePutSB.
+func (b *writeBuffer) writeLengthPrefixedVariablePutSB() {
 	if b.err == nil {
-		b.putInt32(int32(b.variablePutbuf.Len()))
+		b.putInt32(int32(b.variablePutSB.Len()))
 
-		// bytes.Buffer.WriteTo resets the Buffer.
-		_, b.err = b.variablePutbuf.WriteTo(&b.wrapped)
+		// **** UGLY FIX THIS
+		_, b.err = b.wrapped.WriteString(b.variablePutSB.String())
+		b.variablePutSB.Reset()
+
+		// // bytes.Buffer.WriteTo resets the Buffer.
+		// _, b.err = b.variablePutSB.WriteTo(&b.wrapped)
 	}
 }
 
@@ -109,7 +115,7 @@ func (b *writeBuffer) writeLengthPrefixedBuffer(buf *bytes.Buffer) {
 	if b.err == nil {
 		b.putInt32(int32(buf.Len()))
 
-		// bytes.Buffer.WriteTo resets the Buffer.
+		// // bytes.Buffer.WriteTo resets the Buffer.
 		_, b.err = buf.WriteTo(&b.wrapped)
 	}
 }
@@ -124,9 +130,9 @@ func (b *writeBuffer) writeLengthPrefixedString(s string) {
 // writeLengthPrefixedDatum writes a length-prefixed Datum in its
 // string representation. The length is encoded as an int32.
 func (b *writeBuffer) writeLengthPrefixedDatum(d tree.Datum) {
-	fmtCtx := tree.MakeFmtCtx(&b.variablePutbuf, tree.FmtSimple)
+	fmtCtx := tree.MakeFmtCtx(b.variablePutSB, tree.FmtSimple)
 	fmtCtx.FormatNode(d)
-	b.writeLengthPrefixedVariablePutbuf()
+	b.writeLengthPrefixedVariablePutSB()
 }
 
 // writeTerminatedString writes a null-terminated string.

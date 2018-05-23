@@ -15,7 +15,6 @@
 package lex_test
 
 import (
-	"bytes"
 	"fmt"
 	"strings"
 	"testing"
@@ -33,7 +32,7 @@ func TestEncodeSQLString(t *testing.T) {
 	testEncodeSQL(t, lex.EncodeSQLString, true)
 }
 
-func testEncodeSQL(t *testing.T, encode func(*bytes.Buffer, string), forceUTF8 bool) {
+func testEncodeSQL(t *testing.T, encode func(*strings.Builder, string), forceUTF8 bool) {
 	type entry struct{ i, j int }
 	seen := make(map[string]entry)
 	for i := 0; i < 256; i++ {
@@ -61,11 +60,11 @@ func TestEncodeSQLStringSpecial(t *testing.T) {
 	}
 }
 
-func testEncodeString(t *testing.T, input []byte, encode func(*bytes.Buffer, string)) string {
+func testEncodeString(t *testing.T, input []byte, encode func(*strings.Builder, string)) string {
 	s := string(input)
-	var buf bytes.Buffer
-	encode(&buf, s)
-	sql := fmt.Sprintf("SELECT %s", buf.String())
+	var sb strings.Builder
+	encode(&sb, s)
+	sql := fmt.Sprintf("SELECT %s", sb.String())
 	for n := 0; n < len(sql); n++ {
 		ch := sql[n]
 		if ch < 0x20 || ch >= 0x7F {
@@ -87,12 +86,12 @@ func BenchmarkEncodeSQLString(b *testing.B) {
 	str := strings.Repeat("foo", 10000)
 	b.Run("old version", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
-			lex.EncodeSQLStringWithFlags(bytes.NewBuffer(nil), str, lex.EncBareStrings)
+			lex.EncodeSQLStringWithFlags(&strings.Builder{}, str, lex.EncBareStrings)
 		}
 	})
 	b.Run("new version", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
-			lex.EncodeSQLStringInsideArray(bytes.NewBuffer(nil), str)
+			lex.EncodeSQLStringInsideArray(&strings.Builder{}, str)
 		}
 	})
 }
@@ -125,9 +124,9 @@ func TestEncodeRestrictedSQLIdent(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		var buf bytes.Buffer
-		lex.EncodeRestrictedSQLIdent(&buf, tc.input, lex.EncBareStrings)
-		out := buf.String()
+		var sb strings.Builder
+		lex.EncodeRestrictedSQLIdent(&sb, tc.input, lex.EncBareStrings)
+		out := sb.String()
 
 		if out != tc.output {
 			t.Errorf("`%s`: expected `%s`, got `%s`", tc.input, tc.output, out)

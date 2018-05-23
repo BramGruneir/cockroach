@@ -9,9 +9,9 @@
 package changefeedccl
 
 import (
-	"bytes"
 	"context"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/Shopify/sarama"
@@ -358,9 +358,9 @@ func (cf *changefeed) poll(ctx context.Context, startTime, endTime hlc.Timestamp
 		if err != nil {
 			return err
 		}
-		var key bytes.Buffer
+		var key strings.Builder
 		jsonKey.Format(&key)
-		var value bytes.Buffer
+		var value strings.Builder
 		if !rowIsDeleted && cf.envelope == optEnvelopeRow {
 			jsonValue, err := json.MakeJSON(jsonValueRaw)
 			if err != nil {
@@ -374,8 +374,8 @@ func (cf *changefeed) poll(ctx context.Context, startTime, endTime hlc.Timestamp
 
 		message := &sarama.ProducerMessage{
 			Topic: cf.kafkaTopicPrefix + tableDesc.Name,
-			Key:   sarama.ByteEncoder(key.Bytes()),
-			Value: sarama.ByteEncoder(value.Bytes()),
+			Key:   sarama.ByteEncoder([]byte(key.String())),
+			Value: sarama.ByteEncoder([]byte(value.String())),
 		}
 		if _, _, err := cf.kafka.SendMessage(message); err != nil {
 			return errors.Wrapf(err, `sending message to kafka topic %s`, message.Topic)

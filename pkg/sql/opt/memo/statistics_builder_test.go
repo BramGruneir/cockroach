@@ -55,7 +55,7 @@ func TestGetStatsFromConstraint(t *testing.T) {
 		// Multi column stats.
 		multiColStats := make(map[string]*opt.ColumnStatistic, 1)
 		cols = util.MakeFastIntSet(1, 2, 3)
-		key := keyBuffer{}
+		key := keyBuilder{}
 		key.writeColSet(cols)
 		multiColStats[key.String()] = &opt.ColumnStatistic{Cols: cols, DistinctCount: 9900}
 
@@ -63,7 +63,7 @@ func TestGetStatsFromConstraint(t *testing.T) {
 			ColStats: singleColStats, MultiColStats: multiColStats, RowCount: 10000000000,
 		}}
 		sb := &statisticsBuilder{}
-		sb.init(&evalCtx, &opt.Statistics{}, &props.Relational{}, ExprView{}, &keyBuffer{})
+		sb.init(&evalCtx, &opt.Statistics{}, &props.Relational{}, ExprView{}, &keyBuilder{})
 		sb.s.Selectivity = sb.applyConstraintSet(cs, &inputStatsBuilder)
 		sb.applySelectivity(inputStatsBuilder.s.RowCount)
 		testStats(t, sb, sb.s.Selectivity, expectedStats, expectedSelectivity)
@@ -84,7 +84,7 @@ func TestGetStatsFromConstraint(t *testing.T) {
 		// Multi column stats.
 		multiColStats := make(map[string]*opt.ColumnStatistic, 1)
 		cols = util.MakeFastIntSet(4, 5)
-		key := keyBuffer{}
+		key := keyBuilder{}
 		key.writeColSet(cols)
 		multiColStats[key.String()] = &opt.ColumnStatistic{Cols: cols, DistinctCount: 100}
 
@@ -92,7 +92,7 @@ func TestGetStatsFromConstraint(t *testing.T) {
 			ColStats: singleColStats, MultiColStats: multiColStats, RowCount: 10000000000,
 		}}
 		sb := &statisticsBuilder{}
-		sb.init(&evalCtx, &opt.Statistics{}, &props.Relational{}, ExprView{}, &keyBuffer{})
+		sb.init(&evalCtx, &opt.Statistics{}, &props.Relational{}, ExprView{}, &keyBuilder{})
 		sb.s.Selectivity = sb.applyConstraintSet(cs, &inputStatsBuilder)
 		sb.applySelectivity(inputStatsBuilder.s.RowCount)
 		testStats(t, sb, sb.s.Selectivity, expectedStats, expectedSelectivity)

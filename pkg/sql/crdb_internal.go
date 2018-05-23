@@ -1004,7 +1004,7 @@ CREATE TABLE crdb_internal.create_statements (
 							f.WriteString(" ADD CONSTRAINT ")
 							f.FormatNameP(&fk.Name)
 							f.WriteByte(' ')
-							if err := p.printForeignKeyConstraint(ctx, f.Buffer, contextName, idx, lCtx); err != nil {
+							if err := p.printForeignKeyConstraint(ctx, f.Builder, contextName, idx, lCtx); err != nil {
 								return err
 							}
 							if err := alterStmts.Append(tree.NewDString(f.CloseAndGetString())); err != nil {

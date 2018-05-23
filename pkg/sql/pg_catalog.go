@@ -28,8 +28,6 @@ import (
 	"github.com/pkg/errors"
 	"golang.org/x/text/collate"
 
-	"bytes"
-
 	"github.com/cockroachdb/cockroach/pkg/security"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/builtins"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/tree"
@@ -556,11 +554,11 @@ CREATE TABLE pg_catalog.pg_constraint (
 					if confkey, err = colIDArrayToDatum(con.ReferencedIndex.ColumnIDs); err != nil {
 						return err
 					}
-					var buf bytes.Buffer
-					if err := p.printForeignKeyConstraint(ctx, &buf, db.Name, con.Index, tableLookup); err != nil {
+					var sb strings.Builder
+					if err := p.printForeignKeyConstraint(ctx, &sb, db.Name, con.Index, tableLookup); err != nil {
 						return err
 					}
-					condef = tree.NewDString(buf.String())
+					condef = tree.NewDString(sb.String())
 
 				case sqlbase.ConstraintTypeUnique:
 					oid = h.UniqueConstraintOid(db, scName, table, con.Index)

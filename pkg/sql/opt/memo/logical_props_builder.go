@@ -118,7 +118,7 @@ func (b *logicalPropsBuilder) buildScanProps(ev ExprView) props.Logical {
 	// basis for the logical props on a newly created memo group.
 	logical.Relational.Cardinality = props.AnyCardinality
 
-	b.sb.init(b.evalCtx, &logical.Relational.Stats, logical.Relational, ev, &keyBuffer{})
+	b.sb.init(b.evalCtx, &logical.Relational.Stats, logical.Relational, ev, &keyBuilder{})
 	b.sb.buildScan(def)
 
 	return logical
@@ -151,7 +151,7 @@ func (b *logicalPropsBuilder) buildSelectProps(ev ExprView) props.Logical {
 	// Select filter can filter any or all rows.
 	logical.Relational.Cardinality = inputProps.Cardinality.AsLowAs(0)
 
-	b.sb.init(b.evalCtx, &logical.Relational.Stats, logical.Relational, ev, &keyBuffer{})
+	b.sb.init(b.evalCtx, &logical.Relational.Stats, logical.Relational, ev, &keyBuilder{})
 	b.sb.buildSelect(ev.Child(1), &inputProps.Stats)
 
 	return logical
@@ -199,7 +199,7 @@ func (b *logicalPropsBuilder) buildProjectProps(ev ExprView) props.Logical {
 	// Inherit cardinality from input.
 	logical.Relational.Cardinality = inputProps.Cardinality
 
-	b.sb.init(b.evalCtx, &logical.Relational.Stats, logical.Relational, ev, &keyBuffer{})
+	b.sb.init(b.evalCtx, &logical.Relational.Stats, logical.Relational, ev, &keyBuilder{})
 	b.sb.buildProject(&inputProps.Stats)
 
 	return logical
@@ -280,7 +280,7 @@ func (b *logicalPropsBuilder) buildJoinProps(ev ExprView) props.Logical {
 		ev, leftProps.Cardinality, rightProps.Cardinality,
 	)
 
-	b.sb.init(b.evalCtx, &logical.Relational.Stats, logical.Relational, ev, &keyBuffer{})
+	b.sb.init(b.evalCtx, &logical.Relational.Stats, logical.Relational, ev, &keyBuilder{})
 	b.sb.buildJoin(ev.Operator(), &leftProps.Stats, &rightProps.Stats, ev.Child(2))
 
 	return logical
@@ -311,7 +311,7 @@ func (b *logicalPropsBuilder) buildLookupJoinProps(ev ExprView) props.Logical {
 	}
 	filterWeakKeys(logical.Relational)
 
-	b.sb.init(b.evalCtx, &logical.Relational.Stats, logical.Relational, ev, &keyBuffer{})
+	b.sb.init(b.evalCtx, &logical.Relational.Stats, logical.Relational, ev, &keyBuilder{})
 	b.sb.buildLookupJoin(&inputProps.Stats)
 
 	return logical
@@ -364,7 +364,7 @@ func (b *logicalPropsBuilder) buildGroupByProps(ev ExprView) props.Logical {
 		logical.Relational.Cardinality = inputProps.Cardinality.AsLowAs(1)
 	}
 
-	b.sb.init(b.evalCtx, &logical.Relational.Stats, logical.Relational, ev, &keyBuffer{})
+	b.sb.init(b.evalCtx, &logical.Relational.Stats, logical.Relational, ev, &keyBuilder{})
 	b.sb.buildGroupBy(&inputProps.Stats, groupingColSet)
 
 	return logical
@@ -403,7 +403,7 @@ func (b *logicalPropsBuilder) buildSetProps(ev ExprView) props.Logical {
 		ev, leftProps.Cardinality, rightProps.Cardinality,
 	)
 
-	b.sb.init(b.evalCtx, &logical.Relational.Stats, logical.Relational, ev, &keyBuffer{})
+	b.sb.init(b.evalCtx, &logical.Relational.Stats, logical.Relational, ev, &keyBuilder{})
 	b.sb.buildSetOp(ev.Operator(), &leftProps.Stats, &rightProps.Stats, &colMap)
 
 	return logical
@@ -424,7 +424,7 @@ func (b *logicalPropsBuilder) buildValuesProps(ev ExprView) props.Logical {
 	card := uint32(ev.ChildCount())
 	logical.Relational.Cardinality = props.Cardinality{Min: card, Max: card}
 
-	b.sb.init(b.evalCtx, &logical.Relational.Stats, logical.Relational, ev, &keyBuffer{})
+	b.sb.init(b.evalCtx, &logical.Relational.Stats, logical.Relational, ev, &keyBuilder{})
 	b.sb.buildValues()
 
 	return logical
@@ -479,7 +479,7 @@ func (b *logicalPropsBuilder) buildLimitProps(ev ExprView) props.Logical {
 		}
 	}
 
-	b.sb.init(b.evalCtx, &logical.Relational.Stats, logical.Relational, ev, &keyBuffer{})
+	b.sb.init(b.evalCtx, &logical.Relational.Stats, logical.Relational, ev, &keyBuilder{})
 	b.sb.buildLimit(limit, &inputProps.Stats)
 
 	return logical
@@ -511,7 +511,7 @@ func (b *logicalPropsBuilder) buildOffsetProps(ev ExprView) props.Logical {
 		}
 	}
 
-	b.sb.init(b.evalCtx, &logical.Relational.Stats, logical.Relational, ev, &keyBuffer{})
+	b.sb.init(b.evalCtx, &logical.Relational.Stats, logical.Relational, ev, &keyBuilder{})
 	b.sb.buildOffset(offset, &inputProps.Stats)
 
 	return logical
@@ -528,7 +528,7 @@ func (b *logicalPropsBuilder) buildMax1RowProps(ev ExprView) props.Logical {
 	// Max1Row ensures that zero or one row is returned by input.
 	logical.Relational.Cardinality = logical.Relational.Cardinality.AtMost(1)
 
-	b.sb.init(b.evalCtx, &logical.Relational.Stats, logical.Relational, ev, &keyBuffer{})
+	b.sb.init(b.evalCtx, &logical.Relational.Stats, logical.Relational, ev, &keyBuilder{})
 	b.sb.buildMax1Row(&inputProps.Stats)
 
 	return logical
@@ -550,7 +550,7 @@ func (b *logicalPropsBuilder) buildRowNumberProps(ev ExprView) props.Logical {
 	logical.Relational.WeakKeys = logical.Relational.WeakKeys.Copy()
 	logical.Relational.WeakKeys.Add(util.MakeFastIntSet(int(def.ColID)))
 
-	b.sb.init(b.evalCtx, &logical.Relational.Stats, logical.Relational, ev, &keyBuffer{})
+	b.sb.init(b.evalCtx, &logical.Relational.Stats, logical.Relational, ev, &keyBuilder{})
 	b.sb.buildRowNumber(&inputProps.Stats)
 
 	return logical

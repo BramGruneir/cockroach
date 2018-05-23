@@ -15,9 +15,9 @@
 package memo
 
 import (
-	"bytes"
 	"encoding/binary"
 	"reflect"
+	"strings"
 	"unsafe"
 
 	"github.com/cockroachdb/cockroach/pkg/sql/coltypes"
@@ -55,8 +55,8 @@ type privateStorage struct {
 	// datumCtx is used to get the string representation of datum values.
 	datumCtx tree.FmtCtx
 
-	// keyBuf is temporary "scratch" storage that's used to build keys.
-	keyBuf keyBuffer
+	// keyBuilder is temporary "scratch" storage that's used to build keys.
+	keyBuilder keyBuilder
 }
 
 // privateKey is used as the key for the privates map. Different types of
@@ -73,7 +73,7 @@ type privateKey struct {
 
 // init must be called before privateStorage can be used.
 func (ps *privateStorage) init() {
-	ps.datumCtx = tree.MakeFmtCtx(&ps.keyBuf.Buffer, tree.FmtSimple)
+	ps.datumCtx = tree.MakeFmtCtx(&ps.keyBuilder.Builder, tree.FmtSimple)
 	ps.privatesMap = make(map[privateKey]PrivateID)
 	ps.privates = make([]interface{}, 1)
 }
@@ -90,13 +90,13 @@ func (ps *privateStorage) lookup(id PrivateID) interface{} {
 func (ps *privateStorage) internColumnID(colID opt.ColumnID) PrivateID {
 	// The below code is carefully constructed to not allocate in the case
 	// where the value is already in the map. Be careful when modifying.
-	ps.keyBuf.Reset()
-	ps.keyBuf.writeUvarint(uint64(colID))
+	ps.keyBuilder.Reset()
+	ps.keyBuilder.writeUvarint(uint64(colID))
 	typ := (*opt.ColumnID)(nil)
-	if id, ok := ps.privatesMap[privateKey{iface: typ, str: ps.keyBuf.String()}]; ok {
+	if id, ok := ps.privatesMap[privateKey{iface: typ, str: ps.keyBuilder.String()}]; ok {
 		return id
 	}
-	return ps.addValue(privateKey{iface: typ, str: ps.keyBuf.String()}, colID)
+	return ps.addValue(privateKey{iface: typ, str: ps.keyBuilder.String()}, colID)
 }
 
 // internColSet adds the given value to storage and returns an id that can later
@@ -106,13 +106,13 @@ func (ps *privateStorage) internColumnID(colID opt.ColumnID) PrivateID {
 func (ps *privateStorage) internColSet(colSet opt.ColSet) PrivateID {
 	// The below code is carefully constructed to not allocate in the case
 	// where the value is already in the map. Be careful when modifying.
-	ps.keyBuf.Reset()
-	ps.keyBuf.writeColSet(colSet)
+	ps.keyBuilder.Reset()
+	ps.keyBuilder.writeColSet(colSet)
 	typ := (*opt.ColSet)(nil)
-	if id, ok := ps.privatesMap[privateKey{iface: typ, str: ps.keyBuf.String()}]; ok {
+	if id, ok := ps.privatesMap[privateKey{iface: typ, str: ps.keyBuilder.String()}]; ok {
 		return id
 	}
-	return ps.addValue(privateKey{iface: typ, str: ps.keyBuf.String()}, colSet)
+	return ps.addValue(privateKey{iface: typ, str: ps.keyBuilder.String()}, colSet)
 }
 
 // internColList adds the given value to storage and returns an id that can
@@ -122,13 +122,13 @@ func (ps *privateStorage) internColSet(colSet opt.ColSet) PrivateID {
 func (ps *privateStorage) internColList(colList opt.ColList) PrivateID {
 	// The below code is carefully constructed to not allocate in the case where
 	// the value is already in the map. Be careful when modifying.
-	ps.keyBuf.Reset()
-	ps.keyBuf.writeColList(colList)
+	ps.keyBuilder.Reset()
+	ps.keyBuilder.writeColList(colList)
 	typ := (*opt.ColList)(nil)
-	if id, ok := ps.privatesMap[privateKey{iface: typ, str: ps.keyBuf.String()}]; ok {
+	if id, ok := ps.privatesMap[privateKey{iface: typ, str: ps.keyBuilder.String()}]; ok {
 		return id
 	}
-	return ps.addValue(privateKey{iface: typ, str: ps.keyBuf.String()}, colList)
+	return ps.addValue(privateKey{iface: typ, str: ps.keyBuilder.String()}, colList)
 }
 
 // internOperator adds the given value to storage and returns an id that can
@@ -138,13 +138,13 @@ func (ps *privateStorage) internColList(colList opt.ColList) PrivateID {
 func (ps *privateStorage) internOperator(op opt.Operator) PrivateID {
 	// The below code is carefully constructed to not allocate in the case where
 	// the value is already in the map. Be careful when modifying.
-	ps.keyBuf.Reset()
-	ps.keyBuf.writeUvarint(uint64(op))
+	ps.keyBuilder.Reset()
+	ps.keyBuilder.writeUvarint(uint64(op))
 	typ := (*opt.Operator)(nil)
-	if id, ok := ps.privatesMap[privateKey{iface: typ, str: ps.keyBuf.String()}]; ok {
+	if id, ok := ps.privatesMap[privateKey{iface: typ, str: ps.keyBuilder.String()}]; ok {
 		return id
 	}
-	return ps.addValue(privateKey{iface: typ, str: ps.keyBuf.String()}, op)
+	return ps.addValue(privateKey{iface: typ, str: ps.keyBuilder.String()}, op)
 }
 
 // internOrdering adds the given value to storage and returns an id that can
@@ -154,15 +154,15 @@ func (ps *privateStorage) internOperator(op opt.Operator) PrivateID {
 func (ps *privateStorage) internOrdering(ordering props.Ordering) PrivateID {
 	// The below code is carefully constructed to not allocate in the case where
 	// the value is already in the map. Be careful when modifying.
-	ps.keyBuf.Reset()
+	ps.keyBuilder.Reset()
 	for _, col := range ordering {
-		ps.keyBuf.writeVarint(int64(col))
+		ps.keyBuilder.writeVarint(int64(col))
 	}
 	typ := (*props.Ordering)(nil)
-	if id, ok := ps.privatesMap[privateKey{iface: typ, str: ps.keyBuf.String()}]; ok {
+	if id, ok := ps.privatesMap[privateKey{iface: typ, str: ps.keyBuilder.String()}]; ok {
 		return id
 	}
-	return ps.addValue(privateKey{iface: typ, str: ps.keyBuf.String()}, ordering)
+	return ps.addValue(privateKey{iface: typ, str: ps.keyBuilder.String()}, ordering)
 }
 
 // internFuncOpDef adds the given value to storage and returns an id that can
@@ -187,18 +187,18 @@ func (ps *privateStorage) internFuncOpDef(def *FuncOpDef) PrivateID {
 func (ps *privateStorage) internProjectionsOpDef(def *ProjectionsOpDef) PrivateID {
 	// The below code is carefully constructed to not allocate in the case where
 	// the value is already in the map. Be careful when modifying.
-	ps.keyBuf.Reset()
-	ps.keyBuf.writeColList(def.SynthesizedCols)
+	ps.keyBuilder.Reset()
+	ps.keyBuilder.writeColList(def.SynthesizedCols)
 	// Add a separator between the list and the set. Note that the column IDs
 	// cannot be 0.
-	ps.keyBuf.writeUvarint(0)
-	ps.keyBuf.writeColSet(def.PassthroughCols)
+	ps.keyBuilder.writeUvarint(0)
+	ps.keyBuilder.writeColSet(def.PassthroughCols)
 
 	typ := (*ProjectionsOpDef)(nil)
-	if id, ok := ps.privatesMap[privateKey{iface: typ, str: ps.keyBuf.String()}]; ok {
+	if id, ok := ps.privatesMap[privateKey{iface: typ, str: ps.keyBuilder.String()}]; ok {
 		return id
 	}
-	return ps.addValue(privateKey{iface: typ, str: ps.keyBuf.String()}, def)
+	return ps.addValue(privateKey{iface: typ, str: ps.keyBuilder.String()}, def)
 }
 
 // internScanOpDef adds the given value to storage and returns an id that can
@@ -208,22 +208,22 @@ func (ps *privateStorage) internProjectionsOpDef(def *ProjectionsOpDef) PrivateI
 func (ps *privateStorage) internScanOpDef(def *ScanOpDef) PrivateID {
 	// The below code is carefully constructed to not allocate in the case where
 	// the value is already in the map. Be careful when modifying.
-	ps.keyBuf.Reset()
-	ps.keyBuf.writeUvarint(uint64(def.Table))
-	ps.keyBuf.writeUvarint(uint64(def.Index))
+	ps.keyBuilder.Reset()
+	ps.keyBuilder.writeUvarint(uint64(def.Table))
+	ps.keyBuilder.writeUvarint(uint64(def.Index))
 
 	// TODO(radu): consider encoding the constraint rather than the pointer.
 	// It's unclear if we have cases where we expect the same constraints to be
 	// generated multiple times.
-	ps.keyBuf.writeUvarint(uint64(uintptr(unsafe.Pointer(def.Constraint))))
-	ps.keyBuf.writeVarint(def.HardLimit)
-	ps.keyBuf.writeColSet(def.Cols)
+	ps.keyBuilder.writeUvarint(uint64(uintptr(unsafe.Pointer(def.Constraint))))
+	ps.keyBuilder.writeVarint(def.HardLimit)
+	ps.keyBuilder.writeColSet(def.Cols)
 
 	typ := (*ScanOpDef)(nil)
-	if id, ok := ps.privatesMap[privateKey{iface: typ, str: ps.keyBuf.String()}]; ok {
+	if id, ok := ps.privatesMap[privateKey{iface: typ, str: ps.keyBuilder.String()}]; ok {
 		return id
 	}
-	return ps.addValue(privateKey{iface: typ, str: ps.keyBuf.String()}, def)
+	return ps.addValue(privateKey{iface: typ, str: ps.keyBuilder.String()}, def)
 }
 
 // internLookupJoinDef adds the given value to storage and returns an id that
@@ -233,14 +233,14 @@ func (ps *privateStorage) internScanOpDef(def *ScanOpDef) PrivateID {
 func (ps *privateStorage) internLookupJoinDef(def *LookupJoinDef) PrivateID {
 	// The below code is carefully constructed to not allocate in the case where
 	// the value is already in the map. Be careful when modifying.
-	ps.keyBuf.Reset()
-	ps.keyBuf.writeUvarint(uint64(def.Table))
-	ps.keyBuf.writeColSet(def.Cols)
+	ps.keyBuilder.Reset()
+	ps.keyBuilder.writeUvarint(uint64(def.Table))
+	ps.keyBuilder.writeColSet(def.Cols)
 	typ := (*LookupJoinDef)(nil)
-	if id, ok := ps.privatesMap[privateKey{iface: typ, str: ps.keyBuf.String()}]; ok {
+	if id, ok := ps.privatesMap[privateKey{iface: typ, str: ps.keyBuilder.String()}]; ok {
 		return id
 	}
-	return ps.addValue(privateKey{iface: typ, str: ps.keyBuf.String()}, def)
+	return ps.addValue(privateKey{iface: typ, str: ps.keyBuilder.String()}, def)
 }
 
 // internExplainOpDef adds the given value to storage and returns an id that can
@@ -248,17 +248,17 @@ func (ps *privateStorage) internLookupJoinDef(def *LookupJoinDef) PrivateID {
 // value has been previously added to storage, then internExplainOpDef always
 // returns the same private id that was returned from the previous call.
 func (ps *privateStorage) internExplainOpDef(def *ExplainOpDef) PrivateID {
-	ps.keyBuf.Reset()
-	ps.keyBuf.writeUvarint(uint64(def.Options.Mode))
+	ps.keyBuilder.Reset()
+	ps.keyBuilder.writeUvarint(uint64(def.Options.Mode))
 	// This isn't a column set, but writing it out works just the same.
-	ps.keyBuf.writeColSet(def.Options.Flags)
-	ps.keyBuf.writeColList(def.ColList)
-	ps.keyBuf.WriteString(def.Props.Fingerprint())
+	ps.keyBuilder.writeColSet(def.Options.Flags)
+	ps.keyBuilder.writeColList(def.ColList)
+	ps.keyBuilder.WriteString(def.Props.Fingerprint())
 	typ := (*ExplainOpDef)(nil)
-	if id, ok := ps.privatesMap[privateKey{iface: typ, str: ps.keyBuf.String()}]; ok {
+	if id, ok := ps.privatesMap[privateKey{iface: typ, str: ps.keyBuilder.String()}]; ok {
 		return id
 	}
-	return ps.addValue(privateKey{iface: typ, str: ps.keyBuf.String()}, def)
+	return ps.addValue(privateKey{iface: typ, str: ps.keyBuilder.String()}, def)
 }
 
 // internShowTraceOpDef adds the given value to storage and returns an id that can
@@ -266,20 +266,20 @@ func (ps *privateStorage) internExplainOpDef(def *ExplainOpDef) PrivateID {
 // value has been previously added to storage, then internShowTraceOpDef always
 // returns the same private id that was returned from the previous call.
 func (ps *privateStorage) internShowTraceOpDef(def *ShowTraceOpDef) PrivateID {
-	ps.keyBuf.Reset()
-	ps.keyBuf.WriteString(string(def.Type))
+	ps.keyBuilder.Reset()
+	ps.keyBuilder.WriteString(string(def.Type))
 	if def.Compact {
-		ps.keyBuf.WriteByte(1)
+		ps.keyBuilder.WriteByte(1)
 	} else {
-		ps.keyBuf.WriteByte(0)
+		ps.keyBuilder.WriteByte(0)
 	}
-	ps.keyBuf.writeColList(def.ColList)
-	ps.keyBuf.WriteString(def.Props.Fingerprint())
+	ps.keyBuilder.writeColList(def.ColList)
+	ps.keyBuilder.WriteString(def.Props.Fingerprint())
 	typ := (*ShowTraceOpDef)(nil)
-	if id, ok := ps.privatesMap[privateKey{iface: typ, str: ps.keyBuf.String()}]; ok {
+	if id, ok := ps.privatesMap[privateKey{iface: typ, str: ps.keyBuilder.String()}]; ok {
 		return id
 	}
-	return ps.addValue(privateKey{iface: typ, str: ps.keyBuf.String()}, def)
+	return ps.addValue(privateKey{iface: typ, str: ps.keyBuilder.String()}, def)
 }
 
 // internRowNumberDef adds the given value to storage and returns an id that can
@@ -289,17 +289,17 @@ func (ps *privateStorage) internShowTraceOpDef(def *ShowTraceOpDef) PrivateID {
 func (ps *privateStorage) internRowNumberDef(def *RowNumberDef) PrivateID {
 	// The below code is carefully constructed to not allocate in the case where
 	// the value is already in the map. Be careful when modifying.
-	ps.keyBuf.Reset()
+	ps.keyBuilder.Reset()
 	for _, col := range def.Ordering {
-		ps.keyBuf.writeVarint(int64(col))
+		ps.keyBuilder.writeVarint(int64(col))
 	}
-	ps.keyBuf.writeUvarint(uint64(def.ColID))
+	ps.keyBuilder.writeUvarint(uint64(def.ColID))
 
 	typ := (*RowNumberDef)(nil)
-	if id, ok := ps.privatesMap[privateKey{iface: typ, str: ps.keyBuf.String()}]; ok {
+	if id, ok := ps.privatesMap[privateKey{iface: typ, str: ps.keyBuilder.String()}]; ok {
 		return id
 	}
-	return ps.addValue(privateKey{iface: typ, str: ps.keyBuf.String()}, def)
+	return ps.addValue(privateKey{iface: typ, str: ps.keyBuilder.String()}, def)
 }
 
 // internSetOpColMap adds the given value to storage and returns an id that can
@@ -311,15 +311,15 @@ func (ps *privateStorage) internSetOpColMap(setOpColMap *SetOpColMap) PrivateID 
 	// the value is already in the map. Be careful when modifying.
 	// Write the values of each column list. This works with no length or
 	// separator values because the lists are always the same length.
-	ps.keyBuf.Reset()
-	ps.keyBuf.writeColList(setOpColMap.Left)
-	ps.keyBuf.writeColList(setOpColMap.Right)
-	ps.keyBuf.writeColList(setOpColMap.Out)
+	ps.keyBuilder.Reset()
+	ps.keyBuilder.writeColList(setOpColMap.Left)
+	ps.keyBuilder.writeColList(setOpColMap.Right)
+	ps.keyBuilder.writeColList(setOpColMap.Out)
 	typ := (*SetOpColMap)(nil)
-	if id, ok := ps.privatesMap[privateKey{iface: typ, str: ps.keyBuf.String()}]; ok {
+	if id, ok := ps.privatesMap[privateKey{iface: typ, str: ps.keyBuilder.String()}]; ok {
 		return id
 	}
-	return ps.addValue(privateKey{iface: typ, str: ps.keyBuf.String()}, setOpColMap)
+	return ps.addValue(privateKey{iface: typ, str: ps.keyBuilder.String()}, setOpColMap)
 }
 
 // internDatum adds the given value to storage and returns an id that can later
@@ -332,14 +332,14 @@ func (ps *privateStorage) internDatum(datum tree.Datum) PrivateID {
 	// Use the string representation of the datum value, and distinguish distinct
 	// values with the same representation (i.e. "1" can be a Decimal or Int)
 	// using the reflect.Type of the value.
-	ps.keyBuf.Reset()
+	ps.keyBuilder.Reset()
 	datum.Format(&ps.datumCtx)
 	typ := reflect.TypeOf(datum)
-	id, ok := ps.privatesMap[privateKey{iface: typ, str: ps.keyBuf.String()}]
+	id, ok := ps.privatesMap[privateKey{iface: typ, str: ps.keyBuilder.String()}]
 	if ok {
 		return id
 	}
-	return ps.addValue(privateKey{iface: typ, str: ps.keyBuf.String()}, datum)
+	return ps.addValue(privateKey{iface: typ, str: ps.keyBuilder.String()}, datum)
 }
 
 // internType adds the given value to storage and returns an id that can later
@@ -379,12 +379,12 @@ func (ps *privateStorage) internColType(colType coltypes.T) PrivateID {
 	// types.TTuple. So use the string name of the type, and distinguish that
 	// from other private types by using the reflect.Type of the types.T value.
 	typ := reflect.TypeOf(colType)
-	ps.keyBuf.Reset()
-	colType.Format(&ps.keyBuf.Buffer, lex.EncNoFlags)
-	if id, ok := ps.privatesMap[privateKey{iface: typ, str: ps.keyBuf.String()}]; ok {
+	ps.keyBuilder.Reset()
+	colType.Format(&ps.keyBuilder.Builder, lex.EncNoFlags)
+	if id, ok := ps.privatesMap[privateKey{iface: typ, str: ps.keyBuilder.String()}]; ok {
 		return id
 	}
-	return ps.addValue(privateKey{iface: typ, str: ps.keyBuf.String()}, colType)
+	return ps.addValue(privateKey{iface: typ, str: ps.keyBuilder.String()}, colType)
 }
 
 // internTypedExpr adds the given value to storage and returns an id that can
@@ -407,18 +407,18 @@ func (ps *privateStorage) addValue(key privateKey, val interface{}) PrivateID {
 	return id
 }
 
-// keyBuffer wraps bytes.Buffer to provide several helper write methods.
-type keyBuffer struct {
-	bytes.Buffer
+// keyBuilder wraps strings.Builder to provide several helper write methods.
+type keyBuilder struct {
+	strings.Builder
 }
 
-func (kb *keyBuffer) writeUvarint(val uint64) {
+func (kb *keyBuilder) writeUvarint(val uint64) {
 	var arr [10]byte
 	cnt := binary.PutUvarint(arr[:], val)
 	kb.Write(arr[:cnt])
 }
 
-func (kb *keyBuffer) writeVarint(val int64) {
+func (kb *keyBuilder) writeVarint(val int64) {
 	var arr [10]byte
 	cnt := binary.PutVarint(arr[:], val)
 	kb.Write(arr[:cnt])
@@ -426,7 +426,7 @@ func (kb *keyBuffer) writeVarint(val int64) {
 
 // writeColSet writes a series of varints, one for each column in the set, in
 // column id order.
-func (kb *keyBuffer) writeColSet(colSet opt.ColSet) {
+func (kb *keyBuilder) writeColSet(colSet opt.ColSet) {
 	var buf [10]byte
 	colSet.ForEach(func(i int) {
 		cnt := binary.PutUvarint(buf[:], uint64(i))
@@ -436,7 +436,7 @@ func (kb *keyBuffer) writeColSet(colSet opt.ColSet) {
 
 // writeColSet writes a series of varints, one for each column in the list, in
 // list order.
-func (kb *keyBuffer) writeColList(colList opt.ColList) {
+func (kb *keyBuilder) writeColList(colList opt.ColList) {
 	var buf [10]byte
 	for _, col := range colList {
 		cnt := binary.PutUvarint(buf[:], uint64(col))
@@ -446,7 +446,7 @@ func (kb *keyBuffer) writeColList(colList opt.ColList) {
 
 // writeGroupList writes a series of varints, one for each column in the list,
 // in list order.
-func (kb *keyBuffer) writeGroupList(groupList []GroupID) {
+func (kb *keyBuilder) writeGroupList(groupList []GroupID) {
 	var buf [10]byte
 	for _, col := range groupList {
 		cnt := binary.PutUvarint(buf[:], uint64(col))

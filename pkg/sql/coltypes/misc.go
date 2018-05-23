@@ -15,7 +15,7 @@
 package coltypes
 
 import (
-	"bytes"
+	"strings"
 
 	"github.com/cockroachdb/cockroach/pkg/sql/lex"
 )
@@ -30,8 +30,8 @@ import (
 type TUUID struct{}
 
 // Format implements the ColTypeFormatter interface.
-func (node *TUUID) Format(buf *bytes.Buffer, f lex.EncodeFlags) {
-	buf.WriteString("UUID")
+func (node *TUUID) Format(sb *strings.Builder, f lex.EncodeFlags) {
+	sb.WriteString("UUID")
 }
 
 // TIPAddr represents an INET or CIDR type.
@@ -40,8 +40,8 @@ type TIPAddr struct {
 }
 
 // Format implements the ColTypeFormatter interface.
-func (node *TIPAddr) Format(buf *bytes.Buffer, f lex.EncodeFlags) {
-	buf.WriteString(node.Name)
+func (node *TIPAddr) Format(sb *strings.Builder, f lex.EncodeFlags) {
+	sb.WriteString(node.Name)
 }
 
 // TJSON represents the JSON column type.
@@ -50,8 +50,8 @@ type TJSON struct {
 }
 
 // Format implements the ColTypeFormatter interface.
-func (node *TJSON) Format(buf *bytes.Buffer, _ lex.EncodeFlags) {
-	buf.WriteString(node.Name)
+func (node *TJSON) Format(sb *strings.Builder, _ lex.EncodeFlags) {
+	sb.WriteString(node.Name)
 }
 
 // TOid represents an OID type, which is the type of system object
@@ -66,6 +66,6 @@ type TOid struct {
 }
 
 // Format implements the ColTypeFormatter interface.
-func (node *TOid) Format(buf *bytes.Buffer, f lex.EncodeFlags) {
-	buf.WriteString(node.Name)
+func (node *TOid) Format(sb *strings.Builder, f lex.EncodeFlags) {
+	sb.WriteString(node.Name)
 }

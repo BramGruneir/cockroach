@@ -15,7 +15,6 @@
 package tree
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"math"
@@ -3018,10 +3017,10 @@ func PerformCast(ctx *EvalContext, d Datum, t coltypes.CastTargetType) (Datum, e
 		case *DCollatedString:
 			s = t.Contents
 		case *DBytes:
-			var buf bytes.Buffer
-			buf.WriteString("\\x")
-			lex.HexEncodeString(&buf, string(*t))
-			s = buf.String()
+			var sb strings.Builder
+			sb.WriteString("\\x")
+			lex.HexEncodeString(&sb, string(*t))
+			s = sb.String()
 		case *DOid:
 			s = t.name
 		case *DJSON:

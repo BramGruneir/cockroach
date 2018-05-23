@@ -66,8 +66,8 @@ type JSON interface {
 	Compare(JSON) (int, error)
 	// Type returns the JSON type.
 	Type() Type
-	// Format writes out the JSON document to the specified buffer.
-	Format(buf *bytes.Buffer)
+	// Format writes out the JSON document to the specific builder.
+	Format(sb *strings.Builder)
 	// Size returns the size of the JSON document in bytes.
 	Size() uintptr
 
@@ -497,25 +497,25 @@ func (j jsonObject) Compare(other JSON) (int, error) {
 
 var errTrailingCharacters = pgerror.NewError(pgerror.CodeInvalidTextRepresentationError, "trailing characters after JSON document")
 
-func (jsonNull) Format(buf *bytes.Buffer) { buf.WriteString("null") }
+func (jsonNull) Format(sb *strings.Builder) { sb.WriteString("null") }
 
-func (jsonFalse) Format(buf *bytes.Buffer) { buf.WriteString("false") }
+func (jsonFalse) Format(sb *strings.Builder) { sb.WriteString("false") }
 
-func (jsonTrue) Format(buf *bytes.Buffer) { buf.WriteString("true") }
+func (jsonTrue) Format(sb *strings.Builder) { sb.WriteString("true") }
 
-func (j jsonNumber) Format(buf *bytes.Buffer) {
+func (j jsonNumber) Format(sb *strings.Builder) {
 	dec := apd.Decimal(j)
-	buf.WriteString(dec.String())
+	sb.WriteString(dec.String())
 }
 
-func (j jsonString) Format(buf *bytes.Buffer) {
-	encodeJSONString(buf, string(j))
+func (j jsonString) Format(sb *strings.Builder) {
+	encodeJSONString(sb, string(j))
 }
 
 func asString(j JSON) string {
-	var buf bytes.Buffer
-	j.Format(&buf)
-	return buf.String()
+	var sb strings.Builder
+	j.Format(&sb)
+	return sb.String()
 }
 
 func (j jsonNull) String() string   { return asString(j) }
@@ -528,10 +528,10 @@ func (j jsonObject) String() string { return asString(j) }
 
 const hexAlphabet = "0123456789abcdef"
 
-// encodeJSONString writes a string literal to buf as a JSON string.
+// encodeJSONString writes a string literal to builder as a JSON string.
 // Cribbed from https://github.com/golang/go/blob/7badae85f20f1bce4cc344f9202447618d45d414/src/encoding/json/encode.go.
-func encodeJSONString(buf *bytes.Buffer, s string) {
-	buf.WriteByte('"')
+func encodeJSONString(sb *strings.Builder, s string) {
+	sb.WriteByte('"')
 	start := 0
 	for i := 0; i < len(s); {
 		if b := s[i]; b < utf8.RuneSelf {
@@ -540,30 +540,30 @@ func encodeJSONString(buf *bytes.Buffer, s string) {
 				continue
 			}
 			if start < i {
-				buf.WriteString(s[start:i])
+				sb.WriteString(s[start:i])
 			}
 			switch b {
 			case '\\', '"':
-				buf.WriteByte('\\')
-				buf.WriteByte(b)
+				sb.WriteByte('\\')
+				sb.WriteByte(b)
 			case '\n':
-				buf.WriteByte('\\')
-				buf.WriteByte('n')
+				sb.WriteByte('\\')
+				sb.WriteByte('n')
 			case '\r':
-				buf.WriteByte('\\')
-				buf.WriteByte('r')
+				sb.WriteByte('\\')
+				sb.WriteByte('r')
 			case '\t':
-				buf.WriteByte('\\')
-				buf.WriteByte('t')
+				sb.WriteByte('\\')
+				sb.WriteByte('t')
 			default:
 				// This encodes bytes < 0x20 except for \t, \n and \r.
 				// If escapeHTML is set, it also escapes <, >, and &
 				// because they can lead to security holes when
 				// user-controlled strings are rendered into JSON
 				// and served to some browsers.
-				buf.WriteString(`\u00`)
-				buf.WriteByte(hexAlphabet[b>>4])
-				buf.WriteByte(hexAlphabet[b&0xF])
+				sb.WriteString(`\u00`)
+				sb.WriteByte(hexAlphabet[b>>4])
+				sb.WriteByte(hexAlphabet[b&0xF])
 			}
 			i++
 			start = i
@@ -572,9 +572,9 @@ func encodeJSONString(buf *bytes.Buffer, s string) {
 		c, size := utf8.DecodeRuneInString(s[i:])
 		if c == utf8.RuneError && size == 1 {
 			if start < i {
-				buf.WriteString(s[start:i])
+				sb.WriteString(s[start:i])
 			}
-			buf.WriteString(`\ufffd`)
+			sb.WriteString(`\ufffd`)
 			i += size
 			start = i
 			continue
@@ -582,33 +582,33 @@ func encodeJSONString(buf *bytes.Buffer, s string) {
 		i += size
 	}
 	if start < len(s) {
-		buf.WriteString(s[start:])
+		sb.WriteString(s[start:])
 	}
-	buf.WriteByte('"')
+	sb.WriteByte('"')
 }
 
-func (j jsonArray) Format(buf *bytes.Buffer) {
-	buf.WriteByte('[')
+func (j jsonArray) Format(sb *strings.Builder) {
+	sb.WriteByte('[')
 	for i := range j {
 		if i != 0 {
-			buf.WriteString(", ")
+			sb.WriteString(", ")
 		}
-		j[i].Format(buf)
+		j[i].Format(sb)
 	}
-	buf.WriteByte(']')
+	sb.WriteByte(']')
 }
 
-func (j jsonObject) Format(buf *bytes.Buffer) {
-	buf.WriteByte('{')
+func (j jsonObject) Format(sb *strings.Builder) {
+	sb.WriteByte('{')
 	for i := range j {
 		if i != 0 {
-			buf.WriteString(", ")
+			sb.WriteString(", ")
 		}
-		encodeJSONString(buf, string(j[i].k))
-		buf.WriteString(": ")
-		j[i].v.Format(buf)
+		encodeJSONString(sb, string(j[i].k))
+		sb.WriteString(": ")
+		j[i].v.Format(sb)
 	}
-	buf.WriteByte('}')
+	sb.WriteByte('}')
 }
 
 func (jsonNull) Size() uintptr { return 0 }

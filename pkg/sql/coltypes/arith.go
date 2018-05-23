@@ -15,8 +15,8 @@
 package coltypes
 
 import (
-	"bytes"
 	"fmt"
+	"strings"
 
 	"github.com/cockroachdb/cockroach/pkg/sql/lex"
 )
@@ -27,8 +27,8 @@ type TBool struct {
 }
 
 // Format implements the ColTypeFormatter interface.
-func (node *TBool) Format(buf *bytes.Buffer, f lex.EncodeFlags) {
-	buf.WriteString(node.Name)
+func (node *TBool) Format(sb *strings.Builder, f lex.EncodeFlags) {
+	sb.WriteString(node.Name)
 }
 
 // TInt represents an INT, INTEGER, SMALLINT or BIGINT type.
@@ -39,10 +39,10 @@ type TInt struct {
 }
 
 // Format implements the ColTypeFormatter interface.
-func (node *TInt) Format(buf *bytes.Buffer, f lex.EncodeFlags) {
-	buf.WriteString(node.Name)
+func (node *TInt) Format(sb *strings.Builder, f lex.EncodeFlags) {
+	sb.WriteString(node.Name)
 	if node.Width > 0 && !node.ImplicitWidth {
-		fmt.Fprintf(buf, "(%d)", node.Width)
+		fmt.Fprintf(sb, "(%d)", node.Width)
 	}
 }
 
@@ -71,10 +71,10 @@ type TFloat struct {
 }
 
 // Format implements the ColTypeFormatter interface.
-func (node *TFloat) Format(buf *bytes.Buffer, f lex.EncodeFlags) {
-	buf.WriteString(node.Name)
+func (node *TFloat) Format(sb *strings.Builder, f lex.EncodeFlags) {
+	sb.WriteString(node.Name)
 	if node.Prec > 0 {
-		fmt.Fprintf(buf, "(%d)", node.Prec)
+		fmt.Fprintf(sb, "(%d)", node.Prec)
 	}
 }
 
@@ -86,13 +86,13 @@ type TDecimal struct {
 }
 
 // Format implements the ColTypeFormatter interface.
-func (node *TDecimal) Format(buf *bytes.Buffer, f lex.EncodeFlags) {
-	buf.WriteString(node.Name)
+func (node *TDecimal) Format(sb *strings.Builder, f lex.EncodeFlags) {
+	sb.WriteString(node.Name)
 	if node.Prec > 0 {
-		fmt.Fprintf(buf, "(%d", node.Prec)
+		fmt.Fprintf(sb, "(%d", node.Prec)
 		if node.Scale > 0 {
-			fmt.Fprintf(buf, ",%d", node.Scale)
+			fmt.Fprintf(sb, ",%d", node.Scale)
 		}
-		buf.WriteByte(')')
+		sb.WriteByte(')')
 	}
 }

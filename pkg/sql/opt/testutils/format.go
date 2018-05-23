@@ -15,7 +15,7 @@
 package testutils
 
 import (
-	"bytes"
+	"strings"
 
 	"github.com/cockroachdb/cockroach/pkg/sql/opt"
 	"github.com/cockroachdb/cockroach/pkg/sql/opt/exec/execbuilder"
@@ -57,14 +57,14 @@ func fmtInterceptor(f *opt.ExprFmtCtx, tp treeprinter.Node, ev memo.ExprView) bo
 		// Not all scalar operators are supported (e.g. Projections).
 		return false
 	}
-	var buf bytes.Buffer
-	fmtCtx := tree.MakeFmtCtx(&buf, tree.FmtSimple)
+	var sb strings.Builder
+	fmtCtx := tree.MakeFmtCtx(&sb, tree.FmtSimple)
 	fmtCtx.WithIndexedVarFormat(func(ctx *tree.FmtCtx, idx int) {
 		ctx.WriteString(md.ColumnLabel(opt.ColumnID(idx + 1)))
 	})
 	expr.Format(&fmtCtx)
-	ev.FormatScalarProps(f, &buf)
-	tp.Child(buf.String())
+	ev.FormatScalarProps(f, &sb)
+	tp.Child(sb.String())
 	return true
 }
 

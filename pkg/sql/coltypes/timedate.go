@@ -15,7 +15,7 @@
 package coltypes
 
 import (
-	"bytes"
+	"strings"
 
 	"github.com/cockroachdb/cockroach/pkg/sql/lex"
 )
@@ -24,46 +24,46 @@ import (
 type TDate struct{}
 
 // Format implements the ColTypeFormatter interface.
-func (node *TDate) Format(buf *bytes.Buffer, f lex.EncodeFlags) {
-	buf.WriteString("DATE")
+func (node *TDate) Format(sb *strings.Builder, f lex.EncodeFlags) {
+	sb.WriteString("DATE")
 }
 
 // TTime represents a TIME type.
 type TTime struct{}
 
 // Format implements the ColTypeFormatter interface.
-func (node *TTime) Format(buf *bytes.Buffer, f lex.EncodeFlags) {
-	buf.WriteString("TIME")
+func (node *TTime) Format(sb *strings.Builder, f lex.EncodeFlags) {
+	sb.WriteString("TIME")
 }
 
 // TTimeTZ represents a TIMETZ type.
 type TTimeTZ struct{}
 
 // Format implements the ColTypeFormatter interface.
-func (node *TTimeTZ) Format(buf *bytes.Buffer, f lex.EncodeFlags) {
-	buf.WriteString("TIME WITH TIME ZONE")
+func (node *TTimeTZ) Format(sb *strings.Builder, f lex.EncodeFlags) {
+	sb.WriteString("TIME WITH TIME ZONE")
 }
 
 // TTimestamp represents a TIMESTAMP type.
 type TTimestamp struct{}
 
 // Format implements the ColTypeFormatter interface.
-func (node *TTimestamp) Format(buf *bytes.Buffer, f lex.EncodeFlags) {
-	buf.WriteString("TIMESTAMP")
+func (node *TTimestamp) Format(sb *strings.Builder, f lex.EncodeFlags) {
+	sb.WriteString("TIMESTAMP")
 }
 
 // TTimestampTZ represents a TIMESTAMP type.
 type TTimestampTZ struct{}
 
 // Format implements the ColTypeFormatter interface.
-func (node *TTimestampTZ) Format(buf *bytes.Buffer, f lex.EncodeFlags) {
-	buf.WriteString("TIMESTAMP WITH TIME ZONE")
+func (node *TTimestampTZ) Format(sb *strings.Builder, f lex.EncodeFlags) {
+	sb.WriteString("TIMESTAMP WITH TIME ZONE")
 }
 
 // TInterval represents an INTERVAL type
 type TInterval struct{}
 
 // Format implements the ColTypeFormatter interface.
-func (node *TInterval) Format(buf *bytes.Buffer, f lex.EncodeFlags) {
-	buf.WriteString("INTERVAL")
+func (node *TInterval) Format(sb *strings.Builder, f lex.EncodeFlags) {
+	sb.WriteString("INTERVAL")
 }

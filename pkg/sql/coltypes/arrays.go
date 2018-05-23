@@ -15,7 +15,7 @@
 package coltypes
 
 import (
-	"bytes"
+	"strings"
 
 	"github.com/cockroachdb/cockroach/pkg/sql/lex"
 )
@@ -29,11 +29,11 @@ type TArray struct {
 }
 
 // Format implements the ColTypeFormatter interface.
-func (node *TArray) Format(buf *bytes.Buffer, f lex.EncodeFlags) {
-	buf.WriteString(node.Name)
+func (node *TArray) Format(sb *strings.Builder, f lex.EncodeFlags) {
+	sb.WriteString(node.Name)
 	if collation, ok := node.ParamType.(*TCollatedString); ok {
-		buf.WriteString(" COLLATE ")
-		lex.EncodeUnrestrictedSQLIdent(buf, collation.Locale, f)
+		sb.WriteString(" COLLATE ")
+		lex.EncodeUnrestrictedSQLIdent(sb, collation.Locale, f)
 	}
 }
 
@@ -57,6 +57,6 @@ type TVector struct {
 }
 
 // Format implements the ColTypeFormatter interface.
-func (node *TVector) Format(buf *bytes.Buffer, _ lex.EncodeFlags) {
-	buf.WriteString(node.Name)
+func (node *TVector) Format(sb *strings.Builder, _ lex.EncodeFlags) {
+	sb.WriteString(node.Name)
 }

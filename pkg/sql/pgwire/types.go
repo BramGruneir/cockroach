@@ -158,10 +158,10 @@ func (b *writeBuffer) writeTextDatum(ctx context.Context, d tree.Datum, sessionL
 		b.writeLengthPrefixedString(v.JSON.String())
 
 	case *tree.DTuple:
-		b.variablePutbuf.WriteString("(")
+		b.variablePutSB.WriteString("(")
 		for i, d := range v.D {
 			if i > 0 {
-				b.variablePutbuf.WriteString(",")
+				b.variablePutSB.WriteString(",")
 			}
 			if d == tree.DNull {
 				// Emit nothing on NULL.
@@ -169,8 +169,8 @@ func (b *writeBuffer) writeTextDatum(ctx context.Context, d tree.Datum, sessionL
 			}
 			b.simpleFormatter.FormatNode(d)
 		}
-		b.variablePutbuf.WriteString(")")
-		b.writeLengthPrefixedVariablePutbuf()
+		b.variablePutSB.WriteString(")")
+		b.writeLengthPrefixedVariablePutSB()
 
 	case *tree.DArray:
 		// Arrays are serialized as a string of comma-separated values, surrounded
@@ -183,16 +183,16 @@ func (b *writeBuffer) writeTextDatum(ctx context.Context, d tree.Datum, sessionL
 			begin, sep, end = "", " ", ""
 		}
 
-		b.variablePutbuf.WriteString(begin)
+		b.variablePutSB.WriteString(begin)
 		for i, d := range v.Array {
 			if i > 0 {
-				b.variablePutbuf.WriteString(sep)
+				b.variablePutSB.WriteString(sep)
 			}
 			// TODO(justin): add a test for nested arrays.
 			b.arrayFormatter.FormatNode(d)
 		}
-		b.variablePutbuf.WriteString(end)
-		b.writeLengthPrefixedVariablePutbuf()
+		b.variablePutSB.WriteString(end)
+		b.writeLengthPrefixedVariablePutSB()
 
 	case *tree.DOid:
 		b.writeLengthPrefixedDatum(v)

@@ -38,7 +38,7 @@ type Revoke struct {
 // Format implements the NodeFormatter interface.
 func (node *Revoke) Format(ctx *FmtCtx) {
 	ctx.WriteString("REVOKE ")
-	node.Privileges.Format(ctx.Buffer)
+	node.Privileges.Format(ctx.Builder)
 	ctx.WriteString(" ON ")
 	ctx.FormatNode(&node.Targets)
 	ctx.WriteString(" FROM ")

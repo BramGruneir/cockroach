@@ -15,7 +15,6 @@
 package memo
 
 import (
-	"bytes"
 	"fmt"
 	"sort"
 	"strings"
@@ -28,7 +27,7 @@ import (
 
 type exprFormatter struct {
 	mem *Memo
-	buf *bytes.Buffer
+	sb  *strings.Builder
 }
 
 type memoFormatter struct {
@@ -48,10 +47,10 @@ const (
 	formatMemo
 )
 
-func (m *Memo) makeExprFormatter(buf *bytes.Buffer) exprFormatter {
+func (m *Memo) makeExprFormatter(sb *strings.Builder) exprFormatter {
 	return exprFormatter{
 		mem: m,
-		buf: buf,
+		sb:  sb,
 	}
 }
 
@@ -59,7 +58,7 @@ func (m *Memo) makeMemoFormatter(flags FmtFlags) memoFormatter {
 	return memoFormatter{
 		exprFormatter: exprFormatter{
 			mem: m,
-			buf: &bytes.Buffer{},
+			sb:  &strings.Builder{},
 		},
 		flags: flags,
 	}
@@ -98,14 +97,14 @@ func (f *memoFormatter) format() string {
 	for i := range f.ordering {
 		mgrp := &f.mem.groups[f.ordering[i]]
 
-		f.buf.Reset()
+		f.sb.Reset()
 		for ord := 0; ord < mgrp.exprCount(); ord++ {
 			if ord != 0 {
-				f.buf.WriteByte(' ')
+				f.sb.WriteByte(' ')
 			}
 			f.formatExpr(mgrp.expr(ExprOrdinal(ord)))
 		}
-		child := root.Childf("G%d: %s", i+1, f.buf.String())
+		child := root.Childf("G%d: %s", i+1, f.sb.String())
 		f.formatBestExprSet(child, mgrp)
 	}
 
@@ -119,12 +118,12 @@ func (f *memoFormatter) format() string {
 }
 
 func (f *memoFormatter) formatExpr(e *Expr) {
-	fmt.Fprintf(f.buf, "(%s", e.op)
+	fmt.Fprintf(f.sb, "(%s", e.op)
 	for i := 0; i < e.ChildCount(); i++ {
-		fmt.Fprintf(f.buf, " G%d", f.numbering[e.ChildGroup(f.mem, i)])
+		fmt.Fprintf(f.sb, " G%d", f.numbering[e.ChildGroup(f.mem, i)])
 	}
 	f.formatPrivate(e.Private(f.mem), formatMemo)
-	f.buf.WriteString(")")
+	f.sb.WriteString(")")
 }
 
 type bestExprSort struct {
@@ -168,30 +167,30 @@ func (f *memoFormatter) formatBestExprSet(tp treeprinter.Node, mgrp *group) {
 	})
 
 	for _, sort := range beSort {
-		f.buf.Reset()
+		f.sb.Reset()
 		child := tp.Childf("\"%s\"", sort.display)
 		f.formatBestExpr(sort.best)
-		child.Childf("best: %s", f.buf.String())
+		child.Childf("best: %s", f.sb.String())
 		child.Childf("cost: %.2f", sort.best.cost)
 	}
 }
 
 func (f *memoFormatter) formatBestExpr(be *BestExpr) {
-	fmt.Fprintf(f.buf, "(%s", be.op)
+	fmt.Fprintf(f.sb, "(%s", be.op)
 
 	for i := 0; i < be.ChildCount(); i++ {
 		bestChild := be.Child(i)
-		fmt.Fprintf(f.buf, " G%d", f.numbering[bestChild.group])
+		fmt.Fprintf(f.sb, " G%d", f.numbering[bestChild.group])
 
 		// Print properties required of the child if they are interesting.
 		required := f.mem.bestExpr(bestChild).required
 		if required != MinPhysPropsID {
-			fmt.Fprintf(f.buf, "=\"%s\"", f.mem.LookupPhysicalProps(required).String())
+			fmt.Fprintf(f.sb, "=\"%s\"", f.mem.LookupPhysicalProps(required).String())
 		}
 	}
 
 	f.formatPrivate(be.Private(f.mem), formatMemo)
-	f.buf.WriteString(")")
+	f.sb.WriteString(")")
 }
 
 // forEachDependency runs f for each child group of g.
@@ -274,57 +273,57 @@ func (f exprFormatter) formatPrivate(private interface{}, mode formatMode) {
 		def := private.(*ScanOpDef)
 		tab := f.mem.metadata.Table(def.Table)
 		if def.Index == opt.PrimaryIndex {
-			fmt.Fprintf(f.buf, " %s", tab.TabName())
+			fmt.Fprintf(f.sb, " %s", tab.TabName())
 		} else {
-			fmt.Fprintf(f.buf, " %s@%s", tab.TabName(), tab.Index(def.Index).IdxName())
+			fmt.Fprintf(f.sb, " %s@%s", tab.TabName(), tab.Index(def.Index).IdxName())
 		}
 
 		if mode == formatMemo {
 			if tab.ColumnCount() != def.Cols.Len() {
-				fmt.Fprintf(f.buf, ",cols=%s", def.Cols)
+				fmt.Fprintf(f.sb, ",cols=%s", def.Cols)
 			}
 			if def.Constraint != nil {
-				fmt.Fprintf(f.buf, ",constrained")
+				fmt.Fprintf(f.sb, ",constrained")
 			}
 			if def.HardLimit > 0 {
-				fmt.Fprintf(f.buf, ",lim=%d", def.HardLimit)
+				fmt.Fprintf(f.sb, ",lim=%d", def.HardLimit)
 			}
 		}
 
 	case *RowNumberDef:
 		if t.Ordering.Defined() {
-			fmt.Fprintf(f.buf, " ordering=%s", t.Ordering)
+			fmt.Fprintf(f.sb, " ordering=%s", t.Ordering)
 		}
 
 	case opt.ColumnID:
-		fmt.Fprintf(f.buf, " %s", f.mem.metadata.ColumnLabel(t))
+		fmt.Fprintf(f.sb, " %s", f.mem.metadata.ColumnLabel(t))
 
 	case *LookupJoinDef:
-		fmt.Fprintf(f.buf, " %s,cols=%s", f.mem.metadata.Table(t.Table).TabName(), t.Cols)
+		fmt.Fprintf(f.sb, " %s,cols=%s", f.mem.metadata.Table(t.Table).TabName(), t.Cols)
 
 	case *ExplainOpDef:
 		if mode == formatMemo {
 			propsStr := t.Props.String()
 			if propsStr != "" {
-				fmt.Fprintf(f.buf, " %s", propsStr)
+				fmt.Fprintf(f.sb, " %s", propsStr)
 			}
 		}
 
 	case *ShowTraceOpDef:
 		if t.Compact {
-			f.buf.WriteString(" compact")
+			f.sb.WriteString(" compact")
 		}
 		switch t.Type {
 		case tree.ShowTraceKV:
-			f.buf.WriteString(" kv")
+			f.sb.WriteString(" kv")
 		case tree.ShowTraceReplica:
-			f.buf.WriteString(" replica")
+			f.sb.WriteString(" replica")
 		}
 
 		if mode == formatMemo {
 			propsStr := t.Props.String()
 			if propsStr != "" {
-				fmt.Fprintf(f.buf, " %s", propsStr)
+				fmt.Fprintf(f.sb, " %s", propsStr)
 			}
 		}
 
@@ -336,18 +335,18 @@ func (f exprFormatter) formatPrivate(private interface{}, mode formatMode) {
 		// display these columns in memo mode though.
 		if mode == formatMemo {
 			t.PassthroughCols.ForEach(func(i int) {
-				fmt.Fprintf(f.buf, " %s", f.mem.metadata.ColumnLabel(opt.ColumnID(i)))
+				fmt.Fprintf(f.sb, " %s", f.mem.metadata.ColumnLabel(opt.ColumnID(i)))
 			})
 		}
 
 	case props.Ordering:
 		if t.Defined() {
-			fmt.Fprintf(f.buf, " ordering=%s", t)
+			fmt.Fprintf(f.sb, " ordering=%s", t)
 		}
 
 	case *SetOpColMap:
 
 	default:
-		fmt.Fprintf(f.buf, " %v", private)
+		fmt.Fprintf(f.sb, " %v", private)
 	}
 }

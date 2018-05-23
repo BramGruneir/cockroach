@@ -15,13 +15,13 @@
 package coltypes
 
 import (
-	"bytes"
 	"fmt"
+	"strings"
 
 	"github.com/cockroachdb/cockroach/pkg/sql/lex"
 )
 
-// ColTypeFormatter knows how to format a ColType to a bytes.Buffer.
+// ColTypeFormatter knows how to format a ColType to a strings.Builder.
 type ColTypeFormatter interface {
 	fmt.Stringer
 
@@ -30,14 +30,14 @@ type ColTypeFormatter interface {
 	//       different string representations. The optimizer relies on unique
 	//       string representations in order to intern the coltypes during
 	//       memoization.
-	Format(buf *bytes.Buffer, flags lex.EncodeFlags)
+	Format(sb *strings.Builder, flags lex.EncodeFlags)
 }
 
 // ColTypeAsString print a T to a string.
 func ColTypeAsString(n ColTypeFormatter) string {
-	var buf bytes.Buffer
-	n.Format(&buf, lex.EncNoFlags)
-	return buf.String()
+	var sb strings.Builder
+	n.Format(&sb, lex.EncNoFlags)
+	return sb.String()
 }
 
 // CastTargetType represents a type that is a valid cast target.

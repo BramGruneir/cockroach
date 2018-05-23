@@ -15,11 +15,11 @@
 package duration
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"math"
 	"math/big"
+	"strings"
 	"time"
 
 	"github.com/cockroachdb/cockroach/pkg/util/arith"
@@ -163,48 +163,48 @@ func (d Duration) AsBigInt(dst *big.Int) {
 }
 
 // Format emits a string representation of a Duration to a Buffer.
-func (d Duration) Format(buf *bytes.Buffer) {
+func (d Duration) Format(sb *strings.Builder) {
 	if d.Nanos == 0 && d.Days == 0 && d.Months == 0 {
-		buf.WriteString("0s")
+		sb.WriteString("0s")
 		return
 	}
 
 	if absGE(d.Months, 11) {
-		fmt.Fprintf(buf, "%dy", d.Months/12)
+		fmt.Fprintf(sb, "%dy", d.Months/12)
 		d.Months %= 12
 	}
 	if d.Months != 0 {
-		fmt.Fprintf(buf, "%dmon", d.Months)
+		fmt.Fprintf(sb, "%dmon", d.Months)
 	}
 	if d.Days != 0 {
-		fmt.Fprintf(buf, "%dd", d.Days)
+		fmt.Fprintf(sb, "%dd", d.Days)
 	}
 
 	// The following comparisons are careful to preserve the sign in
 	// case the value is MinInt64, and thus cannot be made positive lest
 	// an overflow occur.
 	if absGE(d.Nanos, time.Hour.Nanoseconds()) {
-		fmt.Fprintf(buf, "%dh", d.Nanos/time.Hour.Nanoseconds())
+		fmt.Fprintf(sb, "%dh", d.Nanos/time.Hour.Nanoseconds())
 		d.Nanos %= time.Hour.Nanoseconds()
 	}
 	if absGE(d.Nanos, time.Minute.Nanoseconds()) {
-		fmt.Fprintf(buf, "%dm", d.Nanos/time.Minute.Nanoseconds())
+		fmt.Fprintf(sb, "%dm", d.Nanos/time.Minute.Nanoseconds())
 		d.Nanos %= time.Minute.Nanoseconds()
 	}
 	if absGE(d.Nanos, time.Second.Nanoseconds()) {
-		fmt.Fprintf(buf, "%ds", d.Nanos/time.Second.Nanoseconds())
+		fmt.Fprintf(sb, "%ds", d.Nanos/time.Second.Nanoseconds())
 		d.Nanos %= time.Second.Nanoseconds()
 	}
 	if absGE(d.Nanos, time.Millisecond.Nanoseconds()) {
-		fmt.Fprintf(buf, "%dms", d.Nanos/time.Millisecond.Nanoseconds())
+		fmt.Fprintf(sb, "%dms", d.Nanos/time.Millisecond.Nanoseconds())
 		d.Nanos %= time.Millisecond.Nanoseconds()
 	}
 	if absGE(d.Nanos, time.Microsecond.Nanoseconds()) {
-		fmt.Fprintf(buf, "%dµs", d.Nanos/time.Microsecond.Nanoseconds())
+		fmt.Fprintf(sb, "%dµs", d.Nanos/time.Microsecond.Nanoseconds())
 		d.Nanos %= time.Microsecond.Nanoseconds()
 	}
 	if d.Nanos != 0 {
-		fmt.Fprintf(buf, "%dns", d.Nanos)
+		fmt.Fprintf(sb, "%dns", d.Nanos)
 	}
 }
 
@@ -219,9 +219,9 @@ func absGE(x, y int64) bool {
 
 // String returns a string representation of a Duration.
 func (d Duration) String() string {
-	var buf bytes.Buffer
-	d.Format(&buf)
-	return buf.String()
+	var sb strings.Builder
+	d.Format(&sb)
+	return sb.String()
 }
 
 // Encode returns three integers such that the original Duration is recoverable

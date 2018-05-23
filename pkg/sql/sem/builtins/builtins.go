@@ -576,9 +576,9 @@ var Builtins = map[string][]tree.Builtin{
 				data, format := *args[0].(*tree.DBytes), string(tree.MustBeDString(args[1]))
 				switch format {
 				case "hex":
-					var buf bytes.Buffer
-					lex.HexEncodeString(&buf, string(data))
-					return tree.NewDString(buf.String()), nil
+					var sb strings.Builder
+					lex.HexEncodeString(&sb, string(data))
+					return tree.NewDString(sb.String()), nil
 				case "escape":
 					return tree.NewDString(encodeEscape([]byte(data))), nil
 				case "base64":

@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"fmt"
 	"sort"
+	"strings"
 
 	"github.com/cockroachdb/cockroach/pkg/sql/opt"
 	"github.com/cockroachdb/cockroach/pkg/sql/opt/props"
@@ -250,13 +251,13 @@ func (ev ExprView) format(f *opt.ExprFmtCtx, tp treeprinter.Node) {
 }
 
 func (ev ExprView) formatRelational(f *opt.ExprFmtCtx, tp treeprinter.Node) {
-	var buf bytes.Buffer
+	var sb strings.Builder
 
-	fmt.Fprintf(&buf, "%v", ev.op)
+	fmt.Fprintf(&sb, "%v", ev.op)
 
 	switch ev.Operator() {
 	case opt.ScanOp, opt.ShowTraceOp, opt.ShowTraceForSessionOp:
-		formatter := ev.mem.makeExprFormatter(&buf)
+		formatter := ev.mem.makeExprFormatter(&sb)
 		formatter.formatPrivate(ev.Private(), formatNormal)
 	}
 
@@ -269,7 +270,7 @@ func (ev ExprView) formatRelational(f *opt.ExprFmtCtx, tp treeprinter.Node) {
 
 	logProps := ev.Logical()
 
-	tp = tp.Child(buf.String())
+	tp = tp.Child(sb.String())
 
 	// If a particular column presentation is required of the expression, then
 	// print columns using that information.
@@ -405,11 +406,11 @@ func (ev ExprView) formatScalar(f *opt.ExprFmtCtx, tp treeprinter.Node) {
 		ev.ChildCount() == 0 {
 		return
 	}
-	var buf bytes.Buffer
-	fmt.Fprintf(&buf, "%v", ev.op)
-	ev.formatScalarPrivate(&buf, ev.Private())
-	ev.FormatScalarProps(f, &buf)
-	tp = tp.Child(buf.String())
+	var sb strings.Builder
+	fmt.Fprintf(&sb, "%v", ev.op)
+	ev.formatScalarPrivate(&sb, ev.Private())
+	ev.FormatScalarProps(f, &sb)
+	tp = tp.Child(sb.String())
 	for i := 0; i < ev.ChildCount(); i++ {
 		child := ev.Child(i)
 		child.format(f, tp)
@@ -419,12 +420,12 @@ func (ev ExprView) formatScalar(f *opt.ExprFmtCtx, tp treeprinter.Node) {
 // FormatScalarProps writes out a string representation of the scalar
 // properties (with a preceding space); for example:
 //  " [type=bool, outer=(1), constraints=(/1: [/1 - /1]; tight)]"
-func (ev ExprView) FormatScalarProps(f *opt.ExprFmtCtx, buf *bytes.Buffer) {
+func (ev ExprView) FormatScalarProps(f *opt.ExprFmtCtx, sb *strings.Builder) {
 	// Don't panic if scalar properties don't yet exist when printing
 	// expression.
 	scalar := ev.Logical().Scalar
 	if scalar == nil {
-		buf.WriteString(" [type=undefined]")
+		sb.WriteString(" [type=undefined]")
 	} else {
 		showType := true
 		switch ev.Operator() {
@@ -440,33 +441,33 @@ func (ev ExprView) FormatScalarProps(f *opt.ExprFmtCtx, buf *bytes.Buffer) {
 			!scalar.Constraints.IsUnconstrained()
 
 		if showType || hasOuterCols || hasConstraints {
-			buf.WriteString(" [")
+			sb.WriteString(" [")
 			if showType {
-				fmt.Fprintf(buf, "type=%s", scalar.Type)
+				fmt.Fprintf(sb, "type=%s", scalar.Type)
 				if hasOuterCols || hasConstraints {
-					buf.WriteString(", ")
+					sb.WriteString(", ")
 				}
 			}
 			if hasOuterCols {
-				fmt.Fprintf(buf, "outer=%s", scalar.OuterCols)
+				fmt.Fprintf(sb, "outer=%s", scalar.OuterCols)
 				if hasConstraints {
-					buf.WriteString(", ")
+					sb.WriteString(", ")
 				}
 			}
 			if hasConstraints {
-				fmt.Fprintf(buf, "constraints=(%s", scalar.Constraints)
+				fmt.Fprintf(sb, "constraints=(%s", scalar.Constraints)
 				if scalar.TightConstraints {
-					buf.WriteString("; tight")
+					sb.WriteString("; tight")
 				}
-				buf.WriteString(")")
+				sb.WriteString(")")
 			}
-			buf.WriteString("]")
+			sb.WriteString("]")
 		}
 	}
 
 }
 
-func (ev ExprView) formatScalarPrivate(buf *bytes.Buffer, private interface{}) {
+func (ev ExprView) formatScalarPrivate(sb *strings.Builder, private interface{}) {
 	switch ev.op {
 	case opt.NullOp:
 		// Private is redundant with logical type property.
@@ -480,8 +481,8 @@ func (ev ExprView) formatScalarPrivate(buf *bytes.Buffer, private interface{}) {
 	}
 
 	if private != nil {
-		buf.WriteRune(':')
-		formatter := ev.mem.makeExprFormatter(buf)
+		sb.WriteRune(':')
+		formatter := ev.mem.makeExprFormatter(sb)
 		formatter.formatPrivate(private, formatNormal)
 	}
 }

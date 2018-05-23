@@ -366,7 +366,7 @@ type ruleContentCompiler struct {
 
 func (c *ruleContentCompiler) compile(e Expr) Expr {
 	// Recurse into match or construct operator separately, since they will need
-	// to ceate new context before visiting arguments.
+	// to create new context before visiting arguments.
 	switch t := e.(type) {
 	case *MatchExpr:
 		return c.compileMatch(t)

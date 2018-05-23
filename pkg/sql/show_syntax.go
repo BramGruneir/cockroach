@@ -15,9 +15,9 @@
 package sql
 
 import (
-	"bytes"
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/cockroachdb/cockroach/pkg/sql/lex"
 	"github.com/cockroachdb/cockroach/pkg/sql/parser"
@@ -39,7 +39,7 @@ func (p *planner) ShowSyntax(ctx context.Context, n *tree.ShowSyntax) (planNode,
 	//           ('detail',   'some details'),
 	//           ('hint',     'some hints'))
 	//
-	var query bytes.Buffer
+	var query strings.Builder
 	query.WriteString("SELECT @1 AS field, @2 AS text FROM (VALUES ")
 
 	comma := ""

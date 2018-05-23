@@ -15,8 +15,8 @@
 package coltypes
 
 import (
-	"bytes"
 	"fmt"
+	"strings"
 
 	"github.com/cockroachdb/cockroach/pkg/sql/lex"
 )
@@ -28,10 +28,10 @@ type TString struct {
 }
 
 // Format implements the ColTypeFormatter interface.
-func (node *TString) Format(buf *bytes.Buffer, f lex.EncodeFlags) {
-	buf.WriteString(node.Name)
+func (node *TString) Format(sb *strings.Builder, f lex.EncodeFlags) {
+	sb.WriteString(node.Name)
 	if node.N > 0 {
-		fmt.Fprintf(buf, "(%d)", node.N)
+		fmt.Fprintf(sb, "(%d)", node.N)
 	}
 }
 
@@ -39,8 +39,8 @@ func (node *TString) Format(buf *bytes.Buffer, f lex.EncodeFlags) {
 type TName struct{}
 
 // Format implements the ColTypeFormatter interface.
-func (node *TName) Format(buf *bytes.Buffer, f lex.EncodeFlags) {
-	buf.WriteString("NAME")
+func (node *TName) Format(sb *strings.Builder, f lex.EncodeFlags) {
+	sb.WriteString("NAME")
 }
 
 // TBytes represents a BYTES or BLOB type.
@@ -49,8 +49,8 @@ type TBytes struct {
 }
 
 // Format implements the ColTypeFormatter interface.
-func (node *TBytes) Format(buf *bytes.Buffer, f lex.EncodeFlags) {
-	buf.WriteString(node.Name)
+func (node *TBytes) Format(sb *strings.Builder, f lex.EncodeFlags) {
+	sb.WriteString(node.Name)
 }
 
 // TCollatedString represents a STRING, CHAR or VARCHAR type with a
@@ -62,11 +62,11 @@ type TCollatedString struct {
 }
 
 // Format implements the ColTypeFormatter interface.
-func (node *TCollatedString) Format(buf *bytes.Buffer, f lex.EncodeFlags) {
-	buf.WriteString(node.Name)
+func (node *TCollatedString) Format(sb *strings.Builder, f lex.EncodeFlags) {
+	sb.WriteString(node.Name)
 	if node.N > 0 {
-		fmt.Fprintf(buf, "(%d)", node.N)
+		fmt.Fprintf(sb, "(%d)", node.N)
 	}
-	buf.WriteString(" COLLATE ")
-	lex.EncodeUnrestrictedSQLIdent(buf, node.Locale, f)
+	sb.WriteString(" COLLATE ")
+	lex.EncodeUnrestrictedSQLIdent(sb, node.Locale, f)
 }

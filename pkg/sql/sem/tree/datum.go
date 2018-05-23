@@ -918,7 +918,7 @@ func (*DString) AmbiguousFormat() bool { return true }
 
 // Format implements the NodeFormatter interface.
 func (d *DString) Format(ctx *FmtCtx) {
-	buf, f := ctx.Buffer, ctx.flags
+	buf, f := ctx.Builder, ctx.flags
 	if f.HasFlags(fmtUnicodeStrings) {
 		buf.WriteString(string(*d))
 	} else if f.HasFlags(fmtWithinArray) {
@@ -989,7 +989,7 @@ func (*DCollatedString) AmbiguousFormat() bool { return false }
 
 // Format implements the NodeFormatter interface.
 func (d *DCollatedString) Format(ctx *FmtCtx) {
-	buf, f := ctx.Buffer, ctx.flags
+	buf, f := ctx.Builder, ctx.flags
 	if f.HasFlags(fmtWithinArray) {
 		lex.EncodeSQLStringInsideArray(buf, d.Contents)
 	} else {
@@ -2278,7 +2278,7 @@ func (d *DInterval) Format(ctx *FmtCtx) {
 	if !bareStrings {
 		ctx.WriteByte('\'')
 	}
-	d.Duration.Format(ctx.Buffer)
+	d.Duration.Format(ctx.Builder)
 	if !bareStrings {
 		ctx.WriteByte('\'')
 	}
@@ -2410,10 +2410,10 @@ func (d *DJSON) Format(ctx *FmtCtx) {
 	// escape things to be inside SQL strings in order to avoid this allocation.
 	s := d.JSON.String()
 	if ctx.flags.HasFlags(fmtUnicodeStrings) {
-		ctx.Buffer.WriteString(s)
+		ctx.Builder.WriteString(s)
 		return
 	}
-	lex.EncodeSQLStringWithFlags(ctx.Buffer, s, ctx.flags.EncodeFlags())
+	lex.EncodeSQLStringWithFlags(ctx.Builder, s, ctx.flags.EncodeFlags())
 }
 
 // Size implements the Datum interface.
@@ -3074,7 +3074,7 @@ func (d *DOid) Format(ctx *FmtCtx) {
 		// a DInt, I _think_ it's correct to just delegate to the DInt's Format.
 		d.DInt.Format(ctx)
 	} else {
-		lex.EncodeSQLStringWithFlags(ctx.Buffer, d.name, lex.EncBareStrings)
+		lex.EncodeSQLStringWithFlags(ctx.Builder, d.name, lex.EncBareStrings)
 	}
 }
 

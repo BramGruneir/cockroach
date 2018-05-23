@@ -15,7 +15,6 @@
 package sql
 
 import (
-	"bytes"
 	"context"
 	"strings"
 
@@ -112,7 +111,7 @@ func (p *planner) showCreateView(
 
 func (p *planner) printForeignKeyConstraint(
 	ctx context.Context,
-	buf *bytes.Buffer,
+	sb *strings.Builder,
 	dbPrefix string,
 	idx *sqlbase.IndexDescriptor,
 	lCtx *internalLookupCtx,
@@ -135,22 +134,22 @@ func (p *planner) printForeignKeyConstraint(
 	}
 	fkTableName := tree.MakeTableName(tree.Name(fkDb.Name), tree.Name(fkTable.Name))
 	fkTableName.ExplicitSchema = fkDb.Name != dbPrefix
-	fmtCtx := tree.MakeFmtCtx(buf, tree.FmtSimple)
-	buf.WriteString("FOREIGN KEY (")
-	formatQuoteNames(buf, idx.ColumnNames[0:idx.ForeignKey.SharedPrefixLen]...)
-	buf.WriteString(") REFERENCES ")
+	fmtCtx := tree.MakeFmtCtx(sb, tree.FmtSimple)
+	sb.WriteString("FOREIGN KEY (")
+	formatQuoteNames(sb, idx.ColumnNames[0:idx.ForeignKey.SharedPrefixLen]...)
+	sb.WriteString(") REFERENCES ")
 	fmtCtx.FormatNode(&fkTableName)
-	buf.WriteString(" (")
-	formatQuoteNames(buf, fkIdx.ColumnNames...)
-	buf.WriteByte(')')
+	sb.WriteString(" (")
+	formatQuoteNames(sb, fkIdx.ColumnNames...)
+	sb.WriteByte(')')
 	idx.ColNamesString()
 	if fk.OnDelete != sqlbase.ForeignKeyReference_NO_ACTION {
-		buf.WriteString(" ON DELETE ")
-		buf.WriteString(fk.OnDelete.String())
+		sb.WriteString(" ON DELETE ")
+		sb.WriteString(fk.OnDelete.String())
 	}
 	if fk.OnUpdate != sqlbase.ForeignKeyReference_NO_ACTION {
-		buf.WriteString(" ON UPDATE ")
-		buf.WriteString(fk.OnUpdate.String())
+		sb.WriteString(" ON UPDATE ")
+		sb.WriteString(fk.OnUpdate.String())
 	}
 	return nil
 }
@@ -208,7 +207,7 @@ func (p *planner) showCreateTable(
 	}
 	if primaryKeyIsOnVisibleColumn {
 		f.WriteString(",\n\tCONSTRAINT ")
-		formatQuoteNames(f.Buffer, desc.PrimaryIndex.Name)
+		formatQuoteNames(f.Builder, desc.PrimaryIndex.Name)
 		f.WriteString(" ")
 		f.WriteString(desc.PrimaryKeyString())
 	}
@@ -219,7 +218,7 @@ func (p *planner) showCreateTable(
 			f.WriteString(",\n\tCONSTRAINT ")
 			f.FormatNameP(&fk.Name)
 			f.WriteString(" ")
-			if err := p.printForeignKeyConstraint(ctx, f.Buffer, dbPrefix, idx, lCtx); err != nil {
+			if err := p.printForeignKeyConstraint(ctx, f.Builder, dbPrefix, idx, lCtx); err != nil {
 				return "", err
 			}
 		}
@@ -229,11 +228,11 @@ func (p *planner) showCreateTable(
 			f.WriteString(idx.SQLString(""))
 			// Showing the INTERLEAVE and PARTITION BY for the primary index are
 			// handled last.
-			if err := p.showCreateInterleave(ctx, idx, f.Buffer, dbPrefix, lCtx); err != nil {
+			if err := p.showCreateInterleave(ctx, idx, f.Builder, dbPrefix, lCtx); err != nil {
 				return "", err
 			}
 			if err := ShowCreatePartitioning(
-				a, desc, idx, &idx.Partitioning, f.Buffer, 1 /* indent */, 0, /* colOffset */
+				a, desc, idx, &idx.Partitioning, f.Builder, 1 /* indent */, 0, /* colOffset */
 			); err != nil {
 				return "", err
 			}
@@ -248,9 +247,9 @@ func (p *planner) showCreateTable(
 			}
 		}
 		f.WriteString(",\n\tFAMILY ")
-		formatQuoteNames(f.Buffer, fam.Name)
+		formatQuoteNames(f.Builder, fam.Name)
 		f.WriteString(" (")
-		formatQuoteNames(f.Buffer, activeColumnNames...)
+		formatQuoteNames(f.Builder, activeColumnNames...)
 		f.WriteString(")")
 	}
 
@@ -258,7 +257,7 @@ func (p *planner) showCreateTable(
 		f.WriteString(",\n\t")
 		if len(e.Name) > 0 {
 			f.WriteString("CONSTRAINT ")
-			formatQuoteNames(f.Buffer, e.Name)
+			formatQuoteNames(f.Builder, e.Name)
 			f.WriteString(" ")
 		}
 		f.WriteString("CHECK (")
@@ -268,11 +267,11 @@ func (p *planner) showCreateTable(
 
 	f.WriteString("\n)")
 
-	if err := p.showCreateInterleave(ctx, &desc.PrimaryIndex, f.Buffer, dbPrefix, lCtx); err != nil {
+	if err := p.showCreateInterleave(ctx, &desc.PrimaryIndex, f.Builder, dbPrefix, lCtx); err != nil {
 		return "", err
 	}
 	if err := ShowCreatePartitioning(
-		a, desc, &desc.PrimaryIndex, &desc.PrimaryIndex.Partitioning, f.Buffer, 0 /* indent */, 0, /* colOffset */
+		a, desc, &desc.PrimaryIndex, &desc.PrimaryIndex.Partitioning, f.Builder, 0 /* indent */, 0, /* colOffset */
 	); err != nil {
 		return "", err
 	}
@@ -281,8 +280,8 @@ func (p *planner) showCreateTable(
 }
 
 // formatQuoteNames quotes and adds commas between names.
-func formatQuoteNames(buf *bytes.Buffer, names ...string) {
-	f := tree.MakeFmtCtx(buf, tree.FmtSimple)
+func formatQuoteNames(sb *strings.Builder, names ...string) {
+	f := tree.MakeFmtCtx(sb, tree.FmtSimple)
 	for i := range names {
 		if i > 0 {
 			f.WriteString(", ")
@@ -300,7 +299,7 @@ func formatQuoteNames(buf *bytes.Buffer, names ...string) {
 func (p *planner) showCreateInterleave(
 	ctx context.Context,
 	idx *sqlbase.IndexDescriptor,
-	buf *bytes.Buffer,
+	sb *strings.Builder,
 	dbPrefix string,
 	lCtx *internalLookupCtx,
 ) error {
@@ -322,12 +321,12 @@ func (p *planner) showCreateInterleave(
 	for _, ancestor := range intl.Ancestors {
 		sharedPrefixLen += int(ancestor.SharedPrefixLen)
 	}
-	fmtCtx := tree.MakeFmtCtx(buf, tree.FmtSimple)
-	buf.WriteString(" INTERLEAVE IN PARENT ")
+	fmtCtx := tree.MakeFmtCtx(sb, tree.FmtSimple)
+	sb.WriteString(" INTERLEAVE IN PARENT ")
 	fmtCtx.FormatNode(&parentName)
-	buf.WriteString(" (")
-	formatQuoteNames(buf, idx.ColumnNames[:sharedPrefixLen]...)
-	buf.WriteString(")")
+	sb.WriteString(" (")
+	formatQuoteNames(sb, idx.ColumnNames[:sharedPrefixLen]...)
+	sb.WriteString(")")
 	return nil
 }
 
@@ -338,7 +337,7 @@ func ShowCreatePartitioning(
 	tableDesc *sqlbase.TableDescriptor,
 	idxDesc *sqlbase.IndexDescriptor,
 	partDesc *sqlbase.PartitioningDescriptor,
-	buf *bytes.Buffer,
+	sb *strings.Builder,
 	indent int,
 	colOffset int,
 ) error {
@@ -354,47 +353,47 @@ func ShowCreatePartitioning(
 	}
 
 	indentStr := strings.Repeat("\t", indent)
-	buf.WriteString(` PARTITION BY `)
+	sb.WriteString(` PARTITION BY `)
 	if len(partDesc.List) > 0 {
-		buf.WriteString(`LIST`)
+		sb.WriteString(`LIST`)
 	} else if len(partDesc.Range) > 0 {
-		buf.WriteString(`RANGE`)
+		sb.WriteString(`RANGE`)
 	} else {
 		return errors.Errorf(`invalid partition descriptor: %v`, partDesc)
 	}
-	buf.WriteString(` (`)
+	sb.WriteString(` (`)
 	for i := 0; i < int(partDesc.NumColumns); i++ {
 		if i != 0 {
-			buf.WriteString(", ")
+			sb.WriteString(", ")
 		}
-		buf.WriteString(idxDesc.ColumnNames[colOffset+i])
+		sb.WriteString(idxDesc.ColumnNames[colOffset+i])
 	}
-	buf.WriteString(`) (`)
-	fmtCtx := tree.MakeFmtCtx(buf, tree.FmtSimple)
+	sb.WriteString(`) (`)
+	fmtCtx := tree.MakeFmtCtx(sb, tree.FmtSimple)
 	for i := range partDesc.List {
 		part := &partDesc.List[i]
 		if i != 0 {
-			buf.WriteString(`, `)
+			sb.WriteString(`, `)
 		}
-		buf.WriteString("\n")
-		buf.WriteString(indentStr)
-		buf.WriteString("\tPARTITION ")
+		sb.WriteString("\n")
+		sb.WriteString(indentStr)
+		sb.WriteString("\tPARTITION ")
 		fmtCtx.FormatNameP(&part.Name)
-		buf.WriteString(` VALUES IN (`)
+		sb.WriteString(` VALUES IN (`)
 		for j, values := range part.Values {
 			if j != 0 {
-				buf.WriteString(`, `)
+				sb.WriteString(`, `)
 			}
 			tuple, _, err := sqlbase.DecodePartitionTuple(
 				a, tableDesc, idxDesc, partDesc, values, fakePrefixDatums)
 			if err != nil {
 				return err
 			}
-			buf.WriteString(tuple.String())
+			sb.WriteString(tuple.String())
 		}
-		buf.WriteString(`)`)
+		sb.WriteString(`)`)
 		if err := ShowCreatePartitioning(
-			a, tableDesc, idxDesc, &part.Subpartitioning, buf, indent+1,
+			a, tableDesc, idxDesc, &part.Subpartitioning, sb, indent+1,
 			colOffset+int(partDesc.NumColumns),
 		); err != nil {
 			return err
@@ -402,29 +401,29 @@ func ShowCreatePartitioning(
 	}
 	for i, part := range partDesc.Range {
 		if i != 0 {
-			buf.WriteString(`, `)
+			sb.WriteString(`, `)
 		}
-		buf.WriteString("\n")
-		buf.WriteString(indentStr)
-		buf.WriteString("\tPARTITION ")
-		buf.WriteString(part.Name)
-		buf.WriteString(" VALUES FROM ")
+		sb.WriteString("\n")
+		sb.WriteString(indentStr)
+		sb.WriteString("\tPARTITION ")
+		sb.WriteString(part.Name)
+		sb.WriteString(" VALUES FROM ")
 		fromTuple, _, err := sqlbase.DecodePartitionTuple(
 			a, tableDesc, idxDesc, partDesc, part.FromInclusive, fakePrefixDatums)
 		if err != nil {
 			return err
 		}
-		buf.WriteString(fromTuple.String())
-		buf.WriteString(" TO ")
+		sb.WriteString(fromTuple.String())
+		sb.WriteString(" TO ")
 		toTuple, _, err := sqlbase.DecodePartitionTuple(
 			a, tableDesc, idxDesc, partDesc, part.ToExclusive, fakePrefixDatums)
 		if err != nil {
 			return err
 		}
-		buf.WriteString(toTuple.String())
+		sb.WriteString(toTuple.String())
 	}
-	buf.WriteString("\n")
-	buf.WriteString(indentStr)
-	buf.WriteString(")")
+	sb.WriteString("\n")
+	sb.WriteString(indentStr)
+	sb.WriteString(")")
 	return nil
 }

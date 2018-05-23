@@ -15,7 +15,6 @@
 package privilege
 
 import (
-	"bytes"
 	"sort"
 	"strings"
 
@@ -98,12 +97,12 @@ func (pl List) names() []string {
 
 // Format prints out the list in a buffer.
 // This keeps the existing order and uses ", " as separator.
-func (pl List) Format(buf *bytes.Buffer) {
+func (pl List) Format(sb *strings.Builder) {
 	for i, p := range pl {
 		if i > 0 {
-			buf.WriteString(", ")
+			sb.WriteString(", ")
 		}
-		buf.WriteString(p.String())
+		sb.WriteString(p.String())
 	}
 }
 

@@ -54,19 +54,19 @@ func (node *CreateDatabase) Format(ctx *FmtCtx) {
 	ctx.FormatNode(&node.Name)
 	if node.Template != "" {
 		ctx.WriteString(" TEMPLATE = ")
-		lex.EncodeSQLStringWithFlags(ctx.Buffer, node.Template, ctx.flags.EncodeFlags())
+		lex.EncodeSQLStringWithFlags(ctx.Builder, node.Template, ctx.flags.EncodeFlags())
 	}
 	if node.Encoding != "" {
 		ctx.WriteString(" ENCODING = ")
-		lex.EncodeSQLStringWithFlags(ctx.Buffer, node.Encoding, ctx.flags.EncodeFlags())
+		lex.EncodeSQLStringWithFlags(ctx.Builder, node.Encoding, ctx.flags.EncodeFlags())
 	}
 	if node.Collate != "" {
 		ctx.WriteString(" LC_COLLATE = ")
-		lex.EncodeSQLStringWithFlags(ctx.Buffer, node.Collate, ctx.flags.EncodeFlags())
+		lex.EncodeSQLStringWithFlags(ctx.Builder, node.Collate, ctx.flags.EncodeFlags())
 	}
 	if node.CType != "" {
 		ctx.WriteString(" LC_CTYPE = ")
-		lex.EncodeSQLStringWithFlags(ctx.Buffer, node.CType, ctx.flags.EncodeFlags())
+		lex.EncodeSQLStringWithFlags(ctx.Builder, node.CType, ctx.flags.EncodeFlags())
 	}
 }
 
@@ -360,7 +360,7 @@ func (node *ColumnTableDef) HasColumnFamily() bool {
 func (node *ColumnTableDef) Format(ctx *FmtCtx) {
 	ctx.FormatNode(&node.Name)
 	ctx.WriteByte(' ')
-	node.Type.Format(ctx.Buffer, ctx.flags.EncodeFlags())
+	node.Type.Format(ctx.Builder, ctx.flags.EncodeFlags())
 	if node.Nullable.Nullability != SilentNull && node.Nullable.ConstraintName != "" {
 		ctx.WriteString(" CONSTRAINT ")
 		ctx.FormatNode(&node.Nullable.ConstraintName)

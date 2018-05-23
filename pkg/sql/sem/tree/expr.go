@@ -15,8 +15,8 @@
 package tree
 
 import (
-	"bytes"
 	"fmt"
+	"strings"
 
 	"github.com/cockroachdb/cockroach/pkg/sql/coltypes"
 	"github.com/cockroachdb/cockroach/pkg/sql/lex"
@@ -534,7 +534,7 @@ func (node *IsOfTypeExpr) Format(ctx *FmtCtx) {
 		if i > 0 {
 			ctx.WriteString(", ")
 		}
-		t.Format(ctx.Buffer, ctx.flags.EncodeFlags())
+		t.Format(ctx.Builder, ctx.flags.EncodeFlags())
 	}
 	ctx.WriteByte(')')
 }
@@ -847,12 +847,12 @@ type TypedExprs []TypedExpr
 
 func (node *TypedExprs) String() string {
 	var prefix string
-	var buf bytes.Buffer
+	var sb strings.Builder
 	for _, n := range *node {
-		fmt.Fprintf(&buf, "%s%s", prefix, n)
+		fmt.Fprintf(&sb, "%s%s", prefix, n)
 		prefix = ", "
 	}
-	return buf.String()
+	return sb.String()
 }
 
 // Subquery represents a subquery.
@@ -1304,14 +1304,14 @@ type CastExpr struct {
 
 // Format implements the NodeFormatter interface.
 func (node *CastExpr) Format(ctx *FmtCtx) {
-	buf := ctx.Buffer
+	sb := ctx.Builder
 	switch node.SyntaxMode {
 	case CastPrepend:
 		// This is a special case for things like INTERVAL '1s'. These only work
 		// with string constats; if the underlying expression was changed, we fall
 		// back to the short syntax.
 		if _, ok := node.Expr.(*StrVal); ok {
-			node.Type.Format(buf, ctx.flags.EncodeFlags())
+			node.Type.Format(sb, ctx.flags.EncodeFlags())
 			ctx.WriteByte(' ')
 			ctx.FormatNode(node.Expr)
 			break
@@ -1320,12 +1320,12 @@ func (node *CastExpr) Format(ctx *FmtCtx) {
 	case CastShort:
 		exprFmtWithParen(ctx, node.Expr)
 		ctx.WriteString("::")
-		node.Type.Format(buf, ctx.flags.EncodeFlags())
+		node.Type.Format(sb, ctx.flags.EncodeFlags())
 	default:
 		ctx.WriteString("CAST(")
 		ctx.FormatNode(node.Expr)
 		ctx.WriteString(" AS ")
-		node.Type.Format(buf, ctx.flags.EncodeFlags())
+		node.Type.Format(sb, ctx.flags.EncodeFlags())
 		ctx.WriteByte(')')
 	}
 }
@@ -1453,7 +1453,7 @@ type AnnotateTypeExpr struct {
 
 // Format implements the NodeFormatter interface.
 func (node *AnnotateTypeExpr) Format(ctx *FmtCtx) {
-	buf := ctx.Buffer
+	buf := ctx.Builder
 	switch node.SyntaxMode {
 	case AnnotateShort:
 		exprFmtWithParen(ctx, node.Expr)
@@ -1490,7 +1490,7 @@ type CollateExpr struct {
 func (node *CollateExpr) Format(ctx *FmtCtx) {
 	exprFmtWithParen(ctx, node.Expr)
 	ctx.WriteString(" COLLATE ")
-	lex.EncodeUnrestrictedSQLIdent(ctx.Buffer, node.Locale, lex.EncNoFlags)
+	lex.EncodeUnrestrictedSQLIdent(ctx.Builder, node.Locale, lex.EncNoFlags)
 }
 
 // ColumnAccessExpr represents (SRF).x or (SRF).* expression. Specifically, it

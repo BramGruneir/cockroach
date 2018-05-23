@@ -18,9 +18,9 @@
 package distsqlplan
 
 import (
-	"bytes"
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/cockroachdb/cockroach/pkg/sql/distsqlrun"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/tree"
@@ -30,8 +30,8 @@ import (
 // exprFmtCtxBase produces a FmtCtx used for serializing expressions; a proper
 // IndexedVar formatting function needs to be added on. It replaces placeholders
 // with their values.
-func exprFmtCtxBase(buf *bytes.Buffer, evalCtx *tree.EvalContext) tree.FmtCtx {
-	fmtCtx := tree.MakeFmtCtx(buf, tree.FmtCheckEquivalence)
+func exprFmtCtxBase(sb *strings.Builder, evalCtx *tree.EvalContext) tree.FmtCtx {
+	fmtCtx := tree.MakeFmtCtx(sb, tree.FmtCheckEquivalence)
 	fmtCtx.WithPlaceholderFormat(
 		func(fmtCtx *tree.FmtCtx, p *tree.Placeholder) {
 			d, err := p.Eval(evalCtx)
@@ -59,8 +59,8 @@ func MakeExpression(
 	}
 
 	// We format the expression using the IndexedVar and Placeholder formatting interceptors.
-	var buf bytes.Buffer
-	fmtCtx := exprFmtCtxBase(&buf, evalCtx)
+	var sb strings.Builder
+	fmtCtx := exprFmtCtxBase(&sb, evalCtx)
 	if indexVarMap != nil {
 		fmtCtx.WithIndexedVarFormat(
 			func(ctx *tree.FmtCtx, idx int) {
@@ -74,7 +74,7 @@ func MakeExpression(
 	}
 	fmtCtx.FormatNode(expr)
 	if log.V(1) {
-		log.Infof(context.TODO(), "Expr %s:\n%s", buf.String(), tree.ExprDebugString(expr))
+		log.Infof(context.TODO(), "Expr %s:\n%s", sb.String(), tree.ExprDebugString(expr))
 	}
-	return distsqlrun.Expression{Expr: buf.String()}
+	return distsqlrun.Expression{Expr: sb.String()}
 }

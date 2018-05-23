@@ -15,8 +15,8 @@
 package sql
 
 import (
-	"bytes"
 	"fmt"
+	"strings"
 
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/tree"
 	"github.com/cockroachdb/cockroach/pkg/sql/sqlbase"
@@ -254,12 +254,12 @@ func (pp *physicalProps) reduce(order sqlbase.ColumnOrdering) sqlbase.ColumnOrde
 //
 // Example:
 //   a=b=c; d=e=f; g=CONST; h=CONST; b+,d-
-func (pp *physicalProps) Format(buf *bytes.Buffer, columns sqlbase.ResultColumns) {
+func (pp *physicalProps) Format(sb *strings.Builder, columns sqlbase.ResultColumns) {
 	pp.check()
-	fmtCtx := tree.MakeFmtCtx(buf, tree.FmtSimple)
-	printCol := func(buf *bytes.Buffer, columns sqlbase.ResultColumns, colIdx int) {
+	fmtCtx := tree.MakeFmtCtx(sb, tree.FmtSimple)
+	printCol := func(sb *strings.Builder, columns sqlbase.ResultColumns, colIdx int) {
 		if columns == nil || colIdx >= len(columns) {
-			fmt.Fprintf(buf, "@%d", colIdx+1)
+			fmt.Fprintf(sb, "@%d", colIdx+1)
 		} else {
 			fmtCtx.FormatNameP(&columns[colIdx].Name)
 		}
@@ -278,18 +278,18 @@ func (pp *physicalProps) Format(buf *bytes.Buffer, columns sqlbase.ResultColumns
 	firstGroup := true
 	semiColon := func() {
 		if !firstGroup {
-			buf.WriteString("; ")
+			sb.WriteString("; ")
 		}
 		firstGroup = false
 	}
 	for r, ok := groups.Next(0); ok; r, ok = groups.Next(r + 1) {
 		semiColon()
 		// The representative is always the first element in the group.
-		printCol(buf, columns, r)
+		printCol(sb, columns, r)
 		for i := r + 1; i < pp.eqGroups.Len(); i++ {
 			if pp.eqGroups.Find(i) == r {
-				buf.WriteByte('=')
-				printCol(buf, columns, i)
+				sb.WriteByte('=')
+				printCol(sb, columns, i)
 			}
 		}
 	}
@@ -297,8 +297,8 @@ func (pp *physicalProps) Format(buf *bytes.Buffer, columns sqlbase.ResultColumns
 	if !pp.constantCols.Empty() {
 		for _, c := range pp.constantCols.Ordered() {
 			semiColon()
-			printCol(buf, columns, c)
-			buf.WriteString("=CONST")
+			printCol(sb, columns, c)
+			sb.WriteString("=CONST")
 		}
 	}
 	// Print the non-null columns (except constant columns).
@@ -306,8 +306,8 @@ func (pp *physicalProps) Format(buf *bytes.Buffer, columns sqlbase.ResultColumns
 		for _, c := range pp.notNullCols.Ordered() {
 			if !pp.constantCols.Contains(c) {
 				semiColon()
-				printCol(buf, columns, c)
-				buf.WriteString("!=NULL")
+				printCol(sb, columns, c)
+				sb.WriteString("!=NULL")
 			}
 		}
 	}
@@ -315,19 +315,19 @@ func (pp *physicalProps) Format(buf *bytes.Buffer, columns sqlbase.ResultColumns
 	for _, k := range pp.weakKeys {
 		semiColon()
 		if !k.SubsetOf(pp.notNullCols) {
-			buf.WriteString("weak-")
+			sb.WriteString("weak-")
 		}
 
-		buf.WriteString("key(")
+		sb.WriteString("key(")
 		first := true
 		for c, ok := k.Next(0); ok; c, ok = k.Next(c + 1) {
 			if !first {
-				buf.WriteByte(',')
+				sb.WriteByte(',')
 			}
 			first = false
-			printCol(buf, columns, c)
+			printCol(sb, columns, c)
 		}
-		buf.WriteByte(')')
+		sb.WriteByte(')')
 	}
 
 	// Print the ordering columns and for each their sort order.
@@ -335,7 +335,7 @@ func (pp *physicalProps) Format(buf *bytes.Buffer, columns sqlbase.ResultColumns
 		if i == 0 {
 			semiColon()
 		} else {
-			buf.WriteByte(',')
+			sb.WriteByte(',')
 		}
 
 		// We print the representative column of the group.
@@ -343,17 +343,17 @@ func (pp *physicalProps) Format(buf *bytes.Buffer, columns sqlbase.ResultColumns
 		if o.Direction == encoding.Descending {
 			prefix = byte('-')
 		}
-		buf.WriteByte(prefix)
-		printCol(buf, columns, o.ColIdx)
+		sb.WriteByte(prefix)
+		printCol(sb, columns, o.ColIdx)
 	}
 }
 
 // AsString pretty-prints the physicalProps to a string. The result columns are
 // used for printing column names and are optional.
 func (pp physicalProps) AsString(columns sqlbase.ResultColumns) string {
-	var buf bytes.Buffer
-	pp.Format(&buf, columns)
-	return buf.String()
+	var sb strings.Builder
+	pp.Format(&sb, columns)
+	return sb.String()
 }
 
 func (pp *physicalProps) isEmpty() bool {

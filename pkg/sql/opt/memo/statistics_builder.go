@@ -54,8 +54,8 @@ type statisticsBuilder struct {
 	ev      ExprView
 	evalCtx *tree.EvalContext
 
-	// keyBuf is temporary "scratch" storage that's used to build keys.
-	keyBuf *keyBuffer
+	// keyBuilder is temporary "scratch" storage that's used to build keys.
+	keyBuilder *keyBuilder
 }
 
 func (sb *statisticsBuilder) init(
@@ -63,13 +63,13 @@ func (sb *statisticsBuilder) init(
 	s *opt.Statistics,
 	relational *props.Relational,
 	ev ExprView,
-	keyBuf *keyBuffer,
+	keyBuilder *keyBuilder,
 ) {
 	sb.s = s
 	sb.props = relational
 	sb.ev = ev
 	sb.evalCtx = evalCtx
-	sb.keyBuf = keyBuf
+	sb.keyBuilder = keyBuilder
 	sb.s.Selectivity = 1
 	sb.s.ColStats = make(map[opt.ColumnID]*opt.ColumnStatistic)
 	sb.s.MultiColStats = make(map[string]*opt.ColumnStatistic)
@@ -101,9 +101,9 @@ func (sb *statisticsBuilder) singleColStat(col opt.ColumnID) *opt.ColumnStatisti
 }
 
 func (sb *statisticsBuilder) multiColStat(colSet opt.ColSet) *opt.ColumnStatistic {
-	sb.keyBuf.Reset()
-	sb.keyBuf.writeColSet(colSet)
-	if stat, ok := sb.s.MultiColStats[sb.keyBuf.String()]; ok {
+	sb.keyBuilder.Reset()
+	sb.keyBuilder.writeColSet(colSet)
+	if stat, ok := sb.s.MultiColStats[sb.keyBuilder.String()]; ok {
 		return stat
 	}
 
@@ -187,9 +187,9 @@ func (sb *statisticsBuilder) makeColStat(colSet opt.ColSet) *opt.ColumnStatistic
 		col, _ := colSet.Next(0)
 		sb.s.ColStats[opt.ColumnID(col)] = colStat
 	} else {
-		sb.keyBuf.Reset()
-		sb.keyBuf.writeColSet(colSet)
-		sb.s.MultiColStats[sb.keyBuf.String()] = colStat
+		sb.keyBuilder.Reset()
+		sb.keyBuilder.writeColSet(colSet)
+		sb.s.MultiColStats[sb.keyBuilder.String()] = colStat
 	}
 
 	return colStat
@@ -518,9 +518,9 @@ func (sb *statisticsBuilder) updateDistinctCountsFromConstraint(
 
 func (sb *statisticsBuilder) buildScan(def *ScanOpDef) {
 	inputStatsBuilder := statisticsBuilder{
-		s:      sb.ev.Metadata().TableStatistics(def.Table),
-		props:  sb.props,
-		keyBuf: sb.keyBuf,
+		s:          sb.ev.Metadata().TableStatistics(def.Table),
+		props:      sb.props,
+		keyBuilder: sb.keyBuilder,
 	}
 
 	if def.Constraint != nil {
@@ -545,9 +545,9 @@ func (sb *statisticsBuilder) colStatScan(colSet opt.ColSet) *opt.ColumnStatistic
 	def := sb.ev.Private().(*ScanOpDef)
 
 	inputStatsBuilder := statisticsBuilder{
-		s:      sb.ev.Metadata().TableStatistics(def.Table),
-		props:  sb.props,
-		keyBuf: sb.keyBuf,
+		s:          sb.ev.Metadata().TableStatistics(def.Table),
+		props:      sb.props,
+		keyBuilder: sb.keyBuilder,
 	}
 	colStat := sb.copyColStat(&inputStatsBuilder, colSet)
 	sb.applySelectivityToColStat(colStat, inputStatsBuilder.s.RowCount)
@@ -581,7 +581,7 @@ func (sb *statisticsBuilder) buildSelect(filter ExprView, inputStats *opt.Statis
 	//     for more details.
 	//
 	// (2) If only part of the predicate can be converted to a constraint set
-	//     (i.e., it'sb not tight), the selectivity is calculated as:
+	//     (i.e., it's not tight), the selectivity is calculated as:
 	//     min(selectivity from applyConstraintSet, 1/3).
 	//
 	// (3) If we can't convert the predicate to a constraint set, the predicate
@@ -751,9 +751,9 @@ func (sb *statisticsBuilder) colStatLookupJoin(colSet opt.ColSet) *opt.ColumnSta
 	if !reqJoinedCols.Empty() {
 		def := sb.ev.Private().(*LookupJoinDef)
 		joinedTableStatsBuilder := statisticsBuilder{
-			s:      sb.ev.Metadata().TableStatistics(def.Table),
-			props:  sb.props,
-			keyBuf: sb.keyBuf,
+			s:          sb.ev.Metadata().TableStatistics(def.Table),
+			props:      sb.props,
+			keyBuilder: sb.keyBuilder,
 		}
 		joinedTableColStat := joinedTableStatsBuilder.colStat(reqJoinedCols)
 
@@ -818,7 +818,7 @@ func (sb *statisticsBuilder) colStatGroupBy(colSet opt.ColSet) *opt.ColumnStatis
 func (sb *statisticsBuilder) buildSetOp(
 	op opt.Operator, leftStats, rightStats *opt.Statistics, colMap *SetOpColMap,
 ) {
-	// These calculations are an upper bound on the row count. It'sb likely that
+	// These calculations are an upper bound on the row count. It's likely that
 	// there is some overlap between the two sets, but not full overlap.
 	switch op {
 	case opt.UnionOp, opt.UnionAllOp:
@@ -958,9 +958,9 @@ func (sb *statisticsBuilder) colStatValues(colSet opt.ColSet) *opt.ColumnStatist
 				groups = append(groups, sb.ev.Child(i).ChildGroup(j))
 			}
 		}
-		sb.keyBuf.Reset()
-		sb.keyBuf.writeGroupList(groups)
-		distinct[sb.keyBuf.String()] = struct{}{}
+		sb.keyBuilder.Reset()
+		sb.keyBuilder.writeGroupList(groups)
+		distinct[sb.keyBuilder.String()] = struct{}{}
 	}
 
 	// Update the column statistics.
@@ -1067,9 +1067,9 @@ func (sb *statisticsBuilder) makeStatisticsBuilder(
 	inputStats *opt.Statistics, inputEv ExprView,
 ) statisticsBuilder {
 	return statisticsBuilder{
-		s:      inputStats,
-		props:  inputEv.Logical().Relational,
-		ev:     inputEv,
-		keyBuf: sb.keyBuf,
+		s:          inputStats,
+		props:      inputEv.Logical().Relational,
+		ev:         inputEv,
+		keyBuilder: sb.keyBuilder,
 	}
 }
