@@ -304,9 +304,11 @@ func (c *crossccl) createRandomSessionID(rng *rand.Rand, east bool) string {
 	return fmt.Sprintf("W-%s", id)
 }
 
-const insertQuery1 = `INSERT INTO sessions VALUES ($1, $2, $3, $4, $5, $6, $7, now(), now())`
-const insertQuery2 = `INSERT INTO customers VALUES ($1, $2, $3, now(), now())`
-const insertQuery3 = insertQuery2
+const insertQuerySessions = `INSERT INTO sessions VALUES ($1, $2, $3, $4, $5, $6, $7, now(), now())`
+const insertQueryCustomers = `INSERT INTO customers VALUES ($1, $2, $3, now(), now())`
+const insertQueryDevices = `INSERT INTO devices VALUES ($1, $2, $3, $4, $5, $6, now(), now())`
+const insertQueryVariants = `INSERT INTO variants VALUES ($1, $2, now(), now())`
+const insertQueryParameters = `INSERT INTO parameters VALUES ($1, $2, now(), now())`
 
 const retrieveQuery0 = `SELECT id FROM sessions WHERE id > $1 LIMIT 1`
 const retrieveQuery1 = `
@@ -414,7 +416,7 @@ func (c *crossccl) Ops(
 
 				sessionID := c.createRandomSessionID(rng, c.pickLocality(rng, c.insertLocalPercent))
 				start1 := timeutil.Now()
-				if _, err := db.ExecContext(ctx, insertQuery1,
+				if _, err := db.ExecContext(ctx, insertQuerySessions,
 					sessionID,                           // ID
 					string(randutil.RandBytes(rng, 50)), // a
 					string(randutil.RandBytes(rng, 50)), // b
@@ -423,30 +425,67 @@ func (c *crossccl) Ops(
 					string(randutil.RandBytes(rng, 50)), // e
 					string(randutil.RandBytes(rng, 10)), // f
 				); err != nil {
-					return errors.Wrapf(err, "error running %s", insertQuery1)
+					return errors.Wrapf(err, "error running %s", insertQuerySessions)
 				}
-				hists.Get(`insertQuery1`).Record(timeutil.Since(start1))
+				hists.Get(`insertQuerySession`).Record(timeutil.Since(start1))
 
-				start2 := timeutil.Now()
-				if _, err := db.ExecContext(ctx, insertQuery2,
-					sessionID,                           // session_id
-					fmt.Sprint(rng.Int63()),             // id
-					string(randutil.RandBytes(rng, 50)), // a
-				); err != nil {
-					return errors.Wrapf(err, "error running %s", insertQuery2)
+				// Devices
+				for i = 0; i < c.devicesPerSession; i++ {
+					start := timeutil.Now()
+					if _, err := db.ExecContext(ctx, insertQueryDevices,
+						sessionID,                           // session_id
+						fmt.Sprint(i),                       // id
+						string(randutil.RandBytes(rng, 50)), // a
+						string(randutil.RandBytes(rng, 50)), // b
+						string(randutil.RandBytes(rng, 20)), // c
+						string(randutil.RandBytes(rng, 20)), // d
+						string(randutil.RandBytes(rng, 50)), // e
+						string(randutil.RandBytes(rng, 10)), // f
+					); err != nil {
+						return errors.Wrapf(err, "error running %s", insertQueryDevices)
+					}
+					hists.Get(`insertQueryDevices`).Record(timeutil.Since(start))
 				}
-				hists.Get(`insertQuery2`).Record(timeutil.Since(start2))
 
-				start3 := timeutil.Now()
-				if _, err := db.ExecContext(ctx, insertQuery3,
-					sessionID,                           // session_id
-					fmt.Sprint(rng.Int63()),             // id
-					string(randutil.RandBytes(rng, 50)), // a
-				); err != nil {
-					return errors.Wrapf(err, "error running %s", insertQuery3)
+				// Customers
+				for i = 0; i < c.customersPerSession; i++ {
+					start := timeutil.Now()
+					if _, err := db.ExecContext(ctx, insertQueryCustomers,
+						sessionID,                           // session_id
+						fmt.Sprint(i),                       // id
+						string(randutil.RandBytes(rng, 50)), // a
+					); err != nil {
+						return errors.Wrapf(err, "error running %s", insertQueryCustomers)
+					}
+					hists.Get(`insertQueryCustomers`).Record(timeutil.Since(start))
 				}
-				hists.Get(`insertQuery3`).Record(timeutil.Since(start3))
-				hists.Get(`insert`).Record(timeutil.Since(start1))
+
+				// Variants
+				for i = 0; i < c.variantsPerSession; i++ {
+					start := timeutil.Now()
+					if _, err := db.ExecContext(ctx, insertQueryVariants,
+						sessionID,                           // session_id
+						fmt.Sprint(i),                       // id
+						string(randutil.RandBytes(rng, 50)), // a
+					); err != nil {
+						return errors.Wrapf(err, "error running %s", insertQueryVariants)
+					}
+					hists.Get(`insertQueryVariants`).Record(timeutil.Since(start))
+				}
+
+				// Parameters
+				for i = 0; i < c.parametersPerSession; i++ {
+					start := timeutil.Now()
+					if _, err := db.ExecContext(ctx, insertQueryParameters,
+						sessionID,                           // session_id
+						fmt.Sprint(i),                       // id
+						string(randutil.RandBytes(rng, 50)), // a
+					); err != nil {
+						return errors.Wrapf(err, "error running %s", insertQueryParameters)
+					}
+					hists.Get(`insertQueryParameters`).Record(timeutil.Since(start))
+				}
+
 			} else if opRand < c.insertPercent+c.retrievePercent {
 				// Retrieve
 				// First we have to find a random id to retrieve.
