@@ -1378,8 +1378,8 @@ func (dsp *DistSQLPlanner) addAggregators(
 		// finalIdx is the index of the final aggregation with respect
 		// to all final aggregations.
 		finalIdx := 0
-		for _, e := range aggregations {
-			info := distsqlplan.DistAggregationTable[e.Func]
+		for i, agg := range aggregations {
+			info := distsqlplan.DistAggregationTable[agg.Func]
 
 			// relToAbsLocalIdx maps each local stage for the given
 			// aggregation e to its final index in localAggs.  This
@@ -1395,22 +1395,23 @@ func (dsp *DistSQLPlanner) addAggregators(
 			// First prepare and spec local aggregations.
 			// Note the planNode first feeds the input (inputTypes)
 			// into the local aggregators.
-			for i, localFunc := range info.LocalStage {
+			for j, localFunc := range info.LocalStage {
 				localAgg := distsqlrun.AggregatorSpec_Aggregation{
 					Func:         localFunc,
-					ColIdx:       e.ColIdx,
-					FilterColIdx: e.FilterColIdx,
+					ColIdx:       agg.ColIdx,
+					FilterColIdx: agg.FilterColIdx,
+					Arguments:    agg.Arguments,
 				}
 
 				isNewAgg := true
-				for j, prevLocalAgg := range localAggs {
+				for k, prevLocalAgg := range localAggs {
 					if localAgg.Equals(prevLocalAgg) {
 						// Found existing, equivalent local agg.
 						// Map the relative index (i)
 						// for the current local agg
 						// to the absolute index (j) of
 						// the existing local agg.
-						relToAbsLocalIdx[i] = uint32(j)
+						relToAbsLocalIdx[j] = uint32(k)
 						isNewAgg = false
 						break
 					}
@@ -1419,17 +1420,26 @@ func (dsp *DistSQLPlanner) addAggregators(
 				if isNewAgg {
 					// Append the new local aggregation
 					// and map to its index in localAggs.
-					relToAbsLocalIdx[i] = uint32(len(localAggs))
+					relToAbsLocalIdx[j] = uint32(len(localAggs))
 					localAggs = append(localAggs, localAgg)
 
 					// Keep track of the new local
 					// aggregation's output type.
-					argTypes := make([]sqlbase.ColumnType, len(e.ColIdx))
-					for j, c := range e.ColIdx {
-						argTypes[j] = inputTypes[c]
+					argTypes := make([]sqlbase.ColumnType, len(agg.ColIdx))
+					for k, c := range agg.ColIdx {
+						argTypes[k] = inputTypes[c]
 					}
-					_, outputType, err := distsqlrun.GetAggregateInfo(localFunc, argTypes...)
+					/*for k, argumentColumnType := range aggregationsColumnTypes[i] {
+						argTypes[len(agg.ColIdx)+k] = argumentColumnType
+					}*/
+					prettyInputTypes := make([]string, len(argTypes)+len(aggregationsColumnTypes[i]))
+					for i, inputType := range append(argTypes, aggregationsColumnTypes[i]...) {
+						prettyInputTypes[i] = inputType.SemanticType.String()
+					}
+					log.Warningf(context.TODO(), "******** %d isNewAgg2 %d: %s", j, len(aggregationsColumnTypes[i]), prettyInputTypes)
+					_, outputType, err := distsqlrun.GetAggregateInfo(localFunc, append(argTypes, aggregationsColumnTypes[i]...)...)
 					if err != nil {
+						log.Warningf(context.TODO(), "in isNewAgg2")
 						return err
 					}
 					intermediateTypes = append(intermediateTypes, outputType)
@@ -1449,18 +1459,19 @@ func (dsp *DistSQLPlanner) addAggregators(
 					argIdxs[i] = relToAbsLocalIdx[relIdx]
 				}
 				finalAgg := distsqlrun.AggregatorSpec_Aggregation{
-					Func:   finalInfo.Fn,
-					ColIdx: argIdxs,
+					Func:      finalInfo.Fn,
+					ColIdx:    argIdxs,
+					Arguments: nil, /* *************** HERE?! */
 				}
 
 				isNewAgg := true
-				for i, prevFinalAgg := range finalAggs {
+				for j, prevFinalAgg := range finalAggs {
 					if finalAgg.Equals(prevFinalAgg) {
 						// Found existing, equivalent
 						// final agg.  Map the finalIdx
 						// for the current final agg to
 						// its index (i) in finalAggs.
-						finalIdxMap[finalIdx] = uint32(i)
+						finalIdxMap[finalIdx] = uint32(j)
 						isNewAgg = false
 						break
 					}
@@ -1474,16 +1485,18 @@ func (dsp *DistSQLPlanner) addAggregators(
 
 					if needRender {
 						argTypes := make([]sqlbase.ColumnType, len(finalInfo.LocalIdxs))
-						for i := range finalInfo.LocalIdxs {
+						for j := range finalInfo.LocalIdxs {
 							// Map the corresponding local
 							// aggregation output types for
-							// the current aggregation e.
-							argTypes[i] = intermediateTypes[argIdxs[i]]
+							// the current aggregation agg.
+							argTypes[j] = intermediateTypes[argIdxs[j]]
 						}
+						log.Warningf(context.TODO(), "******** isNewAgg %s", argTypes)
 						_, outputType, err := distsqlrun.GetAggregateInfo(
 							finalInfo.Fn, argTypes...,
 						)
 						if err != nil {
+							log.Warningf(context.TODO(), "in isNewAgg")
 							return err
 						}
 						finalPreRenderTypes = append(finalPreRenderTypes, outputType)
@@ -1649,6 +1662,7 @@ func (dsp *DistSQLPlanner) addAggregators(
 		var err error
 		_, finalOutTypes[i], err = distsqlrun.GetAggregateInfo(agg.Func, argTypes...)
 		if err != nil {
+			log.Warningf(context.TODO(), "in final stage")
 			return err
 		}
 	}

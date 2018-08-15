@@ -83,8 +83,12 @@ func GetAggregateInfo(
 			return constructAgg, colTyp, nil
 		}
 	}
+	prettyInputTypes := make([]string, len(inputTypes))
+	for i, inputType := range inputTypes {
+		prettyInputTypes[i] = inputType.SemanticType.String()
+	}
 	return nil, sqlbase.ColumnType{}, errors.Errorf(
-		"no builtin aggregate for %s on %+v", fn, inputTypes,
+		"no builtin aggregate for %s with input types %s", fn, prettyInputTypes,
 	)
 }
 
@@ -225,6 +229,7 @@ func (ag *aggregatorBase) init(
 
 		aggConstructor, retType, err := GetAggregateInfo(aggInfo.Func, argTypes...)
 		if err != nil {
+			log.Warningf(context.TODO(), "in aggregator.go")
 			return err
 		}
 

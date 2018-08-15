@@ -1097,6 +1097,14 @@ func (a AggregatorSpec_Aggregation) Equals(b AggregatorSpec_Aggregation) bool {
 			return false
 		}
 	}
+	if len(a.Arguments) != len(b.Arguments) {
+		return false
+	}
+	for i, argument := range a.Arguments {
+		if argument != b.Arguments[i] {
+			return false
+		}
+	}
 	return true
 }
 
