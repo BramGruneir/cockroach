@@ -25,6 +25,8 @@ import AllocatorOutput from "src/views/reports/containers/range/allocator";
 import RangeInfo from "src/views/reports/containers/range/rangeInfo";
 import LeaseTable from "src/views/reports/containers/range/leaseTable";
 
+import html2canvas from "html2canvas";
+
 interface RangeOwnProps {
   range: CachedDataReducerState<protos.cockroach.server.serverpb.RangeResponse>;
   allocator: CachedDataReducerState<protos.cockroach.server.serverpb.AllocatorRangeResponse>;
@@ -89,6 +91,12 @@ class Range extends React.Component<RangeProps, {}> {
     if (this.props.location !== nextProps.location) {
       this.refresh(nextProps);
     }
+  }
+
+  screenShot() {
+    html2canvas(document.body).then(function (canvas) {
+      document.body.appendChild(canvas);
+    });
   }
 
   render() {
@@ -166,8 +174,11 @@ class Range extends React.Component<RangeProps, {}> {
     return (
       <div className="section">
         <Helmet>
-          <title>{ `r${responseRangeID.toString()} Range | Debug` }</title>
+          <title>{`r${responseRangeID.toString()} Range | Debug`}</title>
         </Helmet>
+        <button onClick={this.screenShot}>
+          Take a screenshot!
+        </button>
         <h1>Range Report for r{responseRangeID.toString()}</h1>
         <RangeTable infos={infos} replicas={replicas} />
         <LeaseTable info={_.head(infos)} />
