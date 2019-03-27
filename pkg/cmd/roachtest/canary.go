@@ -82,6 +82,18 @@ func fetchCockroachVersion(ctx context.Context, c *cluster, nodeIndex int) (stri
 	return version, nil
 }
 
+func setClusterSetting(
+	ctx context.Context, c *cluster, nodeIndex int, setting string, value string,
+) error {
+	db, err := c.ConnE(ctx, nodeIndex)
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+	_, err = db.ExecContext(ctx, fmt.Sprintf("SET CLUSTER SETTING %s = %s", setting, value))
+	return err
+}
+
 // maybeAddGithubLink will take the issue and if it is just a number, then it
 // will return a full github link.
 func maybeAddGithubLink(issue string) string {

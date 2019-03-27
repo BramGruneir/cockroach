@@ -114,6 +114,10 @@ func registerHibernate(r *registry) {
 			t.Fatal(err)
 		}
 
+		if err := setClusterSetting(ctx, c, node[0], "sql.defaults.serial_normalization", "2"); err != nil {
+			t.Fatal(err)
+		}
+
 		version, err := fetchCockroachVersion(ctx, c, node[0])
 		if err != nil {
 			t.Fatal(err)
