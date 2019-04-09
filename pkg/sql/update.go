@@ -119,7 +119,7 @@ func (p *planner) Update(
 		return nil, err
 	}
 
-	fkChecker := row.MakeFKChecker()
+	fkChecker := row.MakeFKChecker(p.txn, fkTables, &p.alloc)
 
 	// Extract all the LHS column names, and verify that the arity of
 	// the LHS and RHS match when assigning tuples.
