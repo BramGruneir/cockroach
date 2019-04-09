@@ -124,9 +124,7 @@ func makeRowDeleterWithoutCascader(
 	}
 	if checkFKs == CheckFKs {
 		var err error
-		if rd.Fks, err = rd.FKChecker.addDeleteChecker(
-			txn, tableDesc, fkTables, fetchColIDtoRowIndex, alloc,
-		); err != nil {
+		if rd.Fks, err = rd.FKChecker.addDeleteChecker(tableDesc, fetchColIDtoRowIndex); err != nil {
 			return Deleter{}, err
 		}
 	}

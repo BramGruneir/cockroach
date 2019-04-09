@@ -69,9 +69,7 @@ func MakeInserter(
 
 	if checkFKs == CheckFKs {
 		var err error
-		if ri.Fks, err = ri.FKChecker.addInsertChecker(
-			txn, tableDesc, fkTables, ri.InsertColIDtoRowIndex, alloc,
-		); err != nil {
+		if ri.Fks, err = ri.FKChecker.addInsertChecker(tableDesc, ri.InsertColIDtoRowIndex); err != nil {
 			return ri, err
 		}
 	}
