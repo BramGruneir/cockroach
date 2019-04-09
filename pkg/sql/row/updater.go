@@ -43,8 +43,9 @@ type Updater struct {
 	rd Deleter
 	ri Inserter
 
-	Fks      fkExistenceCheckForUpdate
-	cascader *cascader
+	FKChecker *FKChecker
+	Fks       fkExistenceCheckForUpdate
+	cascader  *cascader
 
 	// For allocation avoidance.
 	marshaled       []roachpb.Value
@@ -83,15 +84,16 @@ func MakeUpdater(
 	updateType rowUpdaterType,
 	evalCtx *tree.EvalContext,
 	alloc *sqlbase.DatumAlloc,
+	fkChecker *FKChecker,
 ) (Updater, error) {
 	rowUpdater, err := makeUpdaterWithoutCascader(
-		txn, tableDesc, fkTables, updateCols, requestedCols, updateType, alloc,
+		txn, tableDesc, fkTables, updateCols, requestedCols, updateType, alloc, fkChecker,
 	)
 	if err != nil {
 		return Updater{}, err
 	}
 	rowUpdater.cascader, err = makeUpdateCascader(
-		txn, tableDesc, fkTables, updateCols, evalCtx, alloc,
+		txn, tableDesc, fkTables, updateCols, evalCtx, alloc, fkChecker,
 	)
 	if err != nil {
 		return Updater{}, err
@@ -115,6 +117,7 @@ func makeUpdaterWithoutCascader(
 	requestedCols []sqlbase.ColumnDescriptor,
 	updateType rowUpdaterType,
 	alloc *sqlbase.DatumAlloc,
+	fkChecker *FKChecker,
 ) (Updater, error) {
 	updateColIDtoRowIndex := ColIDtoRowIndexFromCols(updateCols)
 
@@ -185,6 +188,7 @@ func makeUpdaterWithoutCascader(
 		primaryKeyColChange:   primaryKeyColChange,
 		marshaled:             make([]roachpb.Value, len(updateCols)),
 		newValues:             make([]tree.Datum, len(tableCols)),
+		FKChecker:             fkChecker,
 	}
 
 	if primaryKeyColChange {
@@ -193,14 +197,15 @@ func makeUpdaterWithoutCascader(
 		// them, so request them all.
 		var err error
 		if ru.rd, err = makeRowDeleterWithoutCascader(
-			txn, tableDesc, fkTables, tableCols, SkipFKs, alloc,
+			txn, tableDesc, fkTables, tableCols, SkipFKs, alloc, fkChecker,
 		); err != nil {
 			return Updater{}, err
 		}
 		ru.FetchCols = ru.rd.FetchCols
 		ru.FetchColIDtoRowIndex = ColIDtoRowIndexFromCols(ru.FetchCols)
-		if ru.ri, err = MakeInserter(txn, tableDesc, fkTables,
-			tableCols, SkipFKs, alloc); err != nil {
+		if ru.ri, err = MakeInserter(
+			txn, tableDesc, fkTables, tableCols, SkipFKs, alloc, fkChecker,
+		); err != nil {
 			return Updater{}, err
 		}
 	} else {

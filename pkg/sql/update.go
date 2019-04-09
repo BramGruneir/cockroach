@@ -119,6 +119,8 @@ func (p *planner) Update(
 		return nil, err
 	}
 
+	fkChecker := row.MakeFKChecker()
+
 	// Extract all the LHS column names, and verify that the arity of
 	// the LHS and RHS match when assigning tuples.
 	names, setExprs, err := p.namesForExprs(ctx, n.Exprs)
@@ -222,6 +224,7 @@ func (p *planner) Update(
 		row.UpdaterDefault,
 		p.EvalContext(),
 		&p.alloc,
+		fkChecker,
 	)
 	if err != nil {
 		return nil, err

@@ -1121,10 +1121,12 @@ func (ef *execFactory) ConstructInsert(
 	if err != nil {
 		return nil, err
 	}
+	fkChecker := row.MakeFKChecker()
 
 	// Create the table insert, which does the bulk of the work.
-	ri, err := row.MakeInserter(ef.planner.txn, tabDesc, fkTables, colDescs,
-		row.CheckFKs, &ef.planner.alloc)
+	ri, err := row.MakeInserter(
+		ef.planner.txn, tabDesc, fkTables, colDescs, row.CheckFKs, &ef.planner.alloc, fkChecker,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -1204,6 +1206,7 @@ func (ef *execFactory) ConstructUpdate(
 	if err != nil {
 		return nil, err
 	}
+	fkChecker := row.MakeFKChecker()
 
 	// Create the table updater, which does the bulk of the work. In the HP,
 	// the updater derives the columns that need to be fetched. By contrast, the
@@ -1218,6 +1221,7 @@ func (ef *execFactory) ConstructUpdate(
 		row.UpdaterDefault,
 		ef.planner.EvalContext(),
 		&ef.planner.alloc,
+		fkChecker,
 	)
 	if err != nil {
 		return nil, err
@@ -1316,10 +1320,12 @@ func (ef *execFactory) ConstructUpsert(
 	if err != nil {
 		return nil, err
 	}
+	fkChecker := row.MakeFKChecker()
 
 	// Create the table inserter, which does the bulk of the insert-related work.
-	ri, err := row.MakeInserter(ef.planner.txn, tabDesc, fkTables, insertColDescs,
-		row.CheckFKs, &ef.planner.alloc)
+	ri, err := row.MakeInserter(
+		ef.planner.txn, tabDesc, fkTables, insertColDescs, row.CheckFKs, &ef.planner.alloc, fkChecker,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -1338,6 +1344,7 @@ func (ef *execFactory) ConstructUpsert(
 		row.UpdaterDefault,
 		ef.planner.EvalContext(),
 		&ef.planner.alloc,
+		fkChecker,
 	)
 	if err != nil {
 		return nil, err
@@ -1415,6 +1422,7 @@ func (ef *execFactory) ConstructDelete(
 	if err != nil {
 		return nil, err
 	}
+	fkChecker := row.MakeFKChecker()
 
 	fastPathInterleaved := canDeleteFastInterleaved(tabDesc, fkTables)
 	if fastPathNode, ok := maybeCreateDeleteFastNode(
@@ -1434,6 +1442,7 @@ func (ef *execFactory) ConstructDelete(
 		row.CheckFKs,
 		ef.planner.EvalContext(),
 		&ef.planner.alloc,
+		fkChecker,
 	)
 	if err != nil {
 		return nil, err

@@ -223,7 +223,9 @@ func (n *createTableNode) startExec(params runParams) error {
 			nil,
 			desc.Columns,
 			row.SkipFKs,
-			&params.p.alloc)
+			&params.p.alloc,
+			nil, /* fkChecker */
+		)
 		if err != nil {
 			return err
 		}

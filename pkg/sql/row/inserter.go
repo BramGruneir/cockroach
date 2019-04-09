@@ -31,6 +31,7 @@ type Inserter struct {
 	Helper                rowHelper
 	InsertCols            []sqlbase.ColumnDescriptor
 	InsertColIDtoRowIndex map[sqlbase.ColumnID]int
+	FKChecker             *FKChecker
 	Fks                   fkExistenceCheckForInsert
 
 	// For allocation avoidance.
@@ -50,8 +51,10 @@ func MakeInserter(
 	insertCols []sqlbase.ColumnDescriptor,
 	checkFKs checkFKConstraints,
 	alloc *sqlbase.DatumAlloc,
+	fkChecker *FKChecker,
 ) (Inserter, error) {
 	ri := Inserter{
+		FKChecker:             fkChecker,
 		Helper:                newRowHelper(tableDesc, tableDesc.WritableIndexes()),
 		InsertCols:            insertCols,
 		InsertColIDtoRowIndex: ColIDtoRowIndexFromCols(insertCols),
@@ -66,8 +69,9 @@ func MakeInserter(
 
 	if checkFKs == CheckFKs {
 		var err error
-		if ri.Fks, err = makeFkExistenceCheckHelperForInsert(txn, tableDesc, fkTables,
-			ri.InsertColIDtoRowIndex, alloc); err != nil {
+		if ri.Fks, err = ri.FKChecker.addInsertChecker(
+			txn, tableDesc, fkTables, ri.InsertColIDtoRowIndex, alloc,
+		); err != nil {
 			return ri, err
 		}
 	}
