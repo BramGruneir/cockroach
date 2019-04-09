@@ -181,7 +181,7 @@ func Load(
 				}
 			}
 
-			fkChecker := row.MakeFKChecker()
+			fkChecker := row.MakeFKChecker(nil, nil, &sqlbase.DatumAlloc{})
 			ri, err = row.MakeInserter(
 				nil, tableDesc, nil, tableDesc.Columns, row.CheckFKs, &sqlbase.DatumAlloc{}, fkChecker,
 			)

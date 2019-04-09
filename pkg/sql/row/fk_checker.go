@@ -33,14 +33,14 @@ type FKChecker struct {
 	originalRows   map[TableID]*rowcontainer.RowContainer // Original values for rows that have been updated by Table ID
 	updatedRows    map[TableID]*rowcontainer.RowContainer // New values for rows that have been updated by Table ID
 
-	/*
-		Move these here later
-		txn      *client.Txn
-		fkTables FkTableMetadata
-		alloc    *sqlbase.DatumAlloc*/
+	txn      *client.Txn
+	fkTables FkTableMetadata
+	alloc    *sqlbase.DatumAlloc
 }
 
-func MakeFKChecker() *FKChecker {
+func MakeFKChecker(
+	txn *client.Txn, fkTables FkTableMetadata, alloc *sqlbase.DatumAlloc,
+) *FKChecker {
 	return &FKChecker{
 		deleteCheckers: make(map[TableID]fkExistenceCheckForDelete),
 		deletedRows:    make(map[TableID]*rowcontainer.RowContainer),
@@ -49,6 +49,9 @@ func MakeFKChecker() *FKChecker {
 		updateCheckers: make(map[TableID]fkExistenceCheckForUpdate),
 		originalRows:   make(map[TableID]*rowcontainer.RowContainer),
 		updatedRows:    make(map[TableID]*rowcontainer.RowContainer),
+		txn:            txn,
+		fkTables:       fkTables,
+		alloc:          alloc,
 	}
 }
 

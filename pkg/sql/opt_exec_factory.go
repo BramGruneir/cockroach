@@ -1121,7 +1121,7 @@ func (ef *execFactory) ConstructInsert(
 	if err != nil {
 		return nil, err
 	}
-	fkChecker := row.MakeFKChecker()
+	fkChecker := row.MakeFKChecker(ef.planner.txn, fkTables, &ef.planner.alloc)
 
 	// Create the table insert, which does the bulk of the work.
 	ri, err := row.MakeInserter(
@@ -1206,7 +1206,7 @@ func (ef *execFactory) ConstructUpdate(
 	if err != nil {
 		return nil, err
 	}
-	fkChecker := row.MakeFKChecker()
+	fkChecker := row.MakeFKChecker(ef.planner.txn, fkTables, &ef.planner.alloc)
 
 	// Create the table updater, which does the bulk of the work. In the HP,
 	// the updater derives the columns that need to be fetched. By contrast, the
@@ -1320,7 +1320,7 @@ func (ef *execFactory) ConstructUpsert(
 	if err != nil {
 		return nil, err
 	}
-	fkChecker := row.MakeFKChecker()
+	fkChecker := row.MakeFKChecker(ef.planner.txn, fkTables, &ef.planner.alloc)
 
 	// Create the table inserter, which does the bulk of the insert-related work.
 	ri, err := row.MakeInserter(
@@ -1422,7 +1422,7 @@ func (ef *execFactory) ConstructDelete(
 	if err != nil {
 		return nil, err
 	}
-	fkChecker := row.MakeFKChecker()
+	fkChecker := row.MakeFKChecker(ef.planner.txn, fkTables, &ef.planner.alloc)
 
 	fastPathInterleaved := canDeleteFastInterleaved(tabDesc, fkTables)
 	if fastPathNode, ok := maybeCreateDeleteFastNode(

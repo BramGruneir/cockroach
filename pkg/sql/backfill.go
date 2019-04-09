@@ -418,7 +418,6 @@ func (sc *SchemaChanger) truncateIndexes(
 		chunkSize = sc.testingKnobs.BackfillChunkSize
 	}
 	alloc := &sqlbase.DatumAlloc{}
-	fkChecker := row.MakeFKChecker()
 	for _, desc := range dropped {
 		var resume roachpb.Span
 		for rowIdx, done := int64(0), false; !done; rowIdx += chunkSize {
@@ -449,8 +448,16 @@ func (sc *SchemaChanger) truncateIndexes(
 					return err
 				}
 
+				fkChecker := row.MakeFKChecker(txn, nil, alloc)
 				rd, err := row.MakeDeleter(
-					txn, tableDesc, nil, nil, row.SkipFKs, nil /* *tree.EvalContext */, alloc, fkChecker,
+					txn,
+					tableDesc,
+					nil, /* fkTables */
+					nil, /* requestedCols */
+					row.SkipFKs,
+					nil, /* *tree.EvalContext */
+					alloc,
+					fkChecker,
 				)
 				if err != nil {
 					return err
@@ -1252,11 +1259,18 @@ func indexTruncateInTxn(
 ) error {
 	alloc := &sqlbase.DatumAlloc{}
 	idx := tableDesc.Mutations[0].GetIndex()
-	fkChecker := row.MakeFKChecker()
+	fkChecker := row.MakeFKChecker(txn, nil, alloc)
 	var sp roachpb.Span
 	for done := false; !done; done = sp.Key == nil {
 		rd, err := row.MakeDeleter(
-			txn, tableDesc, nil, nil, row.SkipFKs, nil /* *tree.EvalContext */, alloc, fkChecker,
+			txn,
+			tableDesc,
+			nil, /* fkTables */
+			nil, /* requestedCols */
+			row.SkipFKs,
+			nil, /* *tree.EvalContext */
+			alloc,
+			fkChecker,
 		)
 		if err != nil {
 			return err
