@@ -38,6 +38,7 @@ type FKChecker struct {
 	alloc    *sqlbase.DatumAlloc
 }
 
+// MakeFKChecker creates a Foreign Key Checker for use by a writer.
 func MakeFKChecker(
 	txn *client.Txn, fkTables FkTableMetadata, alloc *sqlbase.DatumAlloc,
 ) *FKChecker {
@@ -56,16 +57,14 @@ func MakeFKChecker(
 }
 
 func (fk *FKChecker) addDeleteChecker(
-	txn *client.Txn,
-	table *sqlbase.ImmutableTableDescriptor,
-	fkTables FkTableMetadata,
-	colMap map[sqlbase.ColumnID]int,
-	alloc *sqlbase.DatumAlloc,
+	table *sqlbase.ImmutableTableDescriptor, colMap map[sqlbase.ColumnID]int,
 ) (fkExistenceCheckForDelete, error) {
 	if deleteChecker, exists := fk.deleteCheckers[table.ID]; exists {
 		return deleteChecker, nil
 	}
-	deleteChecker, err := makeFkExistenceCheckHelperForDelete(txn, table, fkTables, colMap, alloc)
+	deleteChecker, err := makeFkExistenceCheckHelperForDelete(
+		fk.txn, table, fk.fkTables, colMap, fk.alloc,
+	)
 	fk.deleteCheckers[table.ID] = deleteChecker
 	if err != nil {
 		return fkExistenceCheckForDelete{}, err
@@ -74,16 +73,14 @@ func (fk *FKChecker) addDeleteChecker(
 }
 
 func (fk *FKChecker) addInsertChecker(
-	txn *client.Txn,
-	table *sqlbase.ImmutableTableDescriptor,
-	fkTables FkTableMetadata,
-	colMap map[sqlbase.ColumnID]int,
-	alloc *sqlbase.DatumAlloc,
+	table *sqlbase.ImmutableTableDescriptor, colMap map[sqlbase.ColumnID]int,
 ) (fkExistenceCheckForInsert, error) {
 	if insertChecker, exists := fk.insertCheckers[table.ID]; exists {
 		return insertChecker, nil
 	}
-	insertChecker, err := makeFkExistenceCheckHelperForInsert(txn, table, fkTables, colMap, alloc)
+	insertChecker, err := makeFkExistenceCheckHelperForInsert(
+		fk.txn, table, fk.fkTables, colMap, fk.alloc,
+	)
 	if err != nil {
 		return fkExistenceCheckForInsert{}, err
 	}
@@ -92,16 +89,14 @@ func (fk *FKChecker) addInsertChecker(
 }
 
 func (fk *FKChecker) addUpdateChecker(
-	txn *client.Txn,
-	table *sqlbase.ImmutableTableDescriptor,
-	fkTables FkTableMetadata,
-	colMap map[sqlbase.ColumnID]int,
-	alloc *sqlbase.DatumAlloc,
+	table *sqlbase.ImmutableTableDescriptor, colMap map[sqlbase.ColumnID]int,
 ) (fkExistenceCheckForUpdate, error) {
 	if updateChecker, exists := fk.updateCheckers[table.ID]; exists {
 		return updateChecker, nil
 	}
-	updateChecker, err := makeFkExistenceCheckHelperForUpdate(txn, table, fkTables, colMap, alloc)
+	updateChecker, err := makeFkExistenceCheckHelperForUpdate(
+		fk.txn, table, fk.fkTables, colMap, fk.alloc,
+	)
 	if err != nil {
 		return fkExistenceCheckForUpdate{}, err
 	}
