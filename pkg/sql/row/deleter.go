@@ -30,6 +30,7 @@ type Deleter struct {
 	Helper               rowHelper
 	FetchCols            []sqlbase.ColumnDescriptor
 	FetchColIDtoRowIndex map[sqlbase.ColumnID]int
+	FKChecker            *FKChecker
 	Fks                  fkExistenceCheckForDelete
 	cascader             *cascader
 	// For allocation avoidance.
@@ -49,16 +50,19 @@ func MakeDeleter(
 	checkFKs checkFKConstraints,
 	evalCtx *tree.EvalContext,
 	alloc *sqlbase.DatumAlloc,
+	fkChecker *FKChecker,
 ) (Deleter, error) {
 	rowDeleter, err := makeRowDeleterWithoutCascader(
-		txn, tableDesc, fkTables, requestedCols, checkFKs, alloc,
+		txn, tableDesc, fkTables, requestedCols, checkFKs, alloc, fkChecker,
 	)
 	if err != nil {
 		return Deleter{}, err
 	}
 	if checkFKs == CheckFKs {
 		var err error
-		rowDeleter.cascader, err = makeDeleteCascader(txn, tableDesc, fkTables, evalCtx, alloc)
+		rowDeleter.cascader, err = makeDeleteCascader(
+			txn, tableDesc, fkTables, evalCtx, alloc, fkChecker,
+		)
 		if err != nil {
 			return Deleter{}, err
 		}
@@ -75,6 +79,7 @@ func makeRowDeleterWithoutCascader(
 	requestedCols []sqlbase.ColumnDescriptor,
 	checkFKs checkFKConstraints,
 	alloc *sqlbase.DatumAlloc,
+	fkChecker *FKChecker,
 ) (Deleter, error) {
 	indexes := tableDesc.DeletableIndexes()
 
@@ -115,11 +120,13 @@ func makeRowDeleterWithoutCascader(
 		Helper:               newRowHelper(tableDesc, indexes),
 		FetchCols:            fetchCols,
 		FetchColIDtoRowIndex: fetchColIDtoRowIndex,
+		FKChecker:            fkChecker,
 	}
 	if checkFKs == CheckFKs {
 		var err error
-		if rd.Fks, err = makeFkExistenceCheckHelperForDelete(txn, tableDesc, fkTables,
-			fetchColIDtoRowIndex, alloc); err != nil {
+		if rd.Fks, err = rd.FKChecker.addDeleteChecker(
+			txn, tableDesc, fkTables, fetchColIDtoRowIndex, alloc,
+		); err != nil {
 			return Deleter{}, err
 		}
 	}

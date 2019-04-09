@@ -171,6 +171,7 @@ func (cb *ColumnBackfiller) RunColumnBackfillChunk(
 	requestedCols := make([]sqlbase.ColumnDescriptor, 0, len(tableDesc.Columns)+len(cb.added))
 	requestedCols = append(requestedCols, tableDesc.Columns...)
 	requestedCols = append(requestedCols, cb.added...)
+	fkChecker := row.MakeFKChecker()
 	ru, err := row.MakeUpdater(
 		txn,
 		tableDesc,
@@ -180,6 +181,7 @@ func (cb *ColumnBackfiller) RunColumnBackfillChunk(
 		row.UpdaterOnlyColumns,
 		cb.evalCtx,
 		&cb.alloc,
+		fkChecker,
 	)
 	if err != nil {
 		return roachpb.Key{}, err

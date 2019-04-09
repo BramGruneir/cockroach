@@ -266,6 +266,7 @@ type tableUpserter struct {
 
 	// Set by init.
 	fkTables              row.FkTableMetadata // for fk checks in update case
+	fkChecker             row.FKChecker
 	ru                    row.Updater
 	updateColIDtoRowIndex map[sqlbase.ColumnID]int
 	fetchCols             []sqlbase.ColumnDescriptor
@@ -304,6 +305,7 @@ func (tu *tableUpserter) init(txn *client.Txn, evalCtx *tree.EvalContext) error 
 			row.UpdaterDefault,
 			evalCtx,
 			tu.alloc,
+			&tu.fkChecker,
 		)
 		if err != nil {
 			return err

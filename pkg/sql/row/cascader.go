@@ -30,10 +30,11 @@ import (
 
 // cascader is used to handle all referential integrity cascading actions.
 type cascader struct {
-	txn      *client.Txn
-	fkTables FkTableMetadata
-	alloc    *sqlbase.DatumAlloc
-	evalCtx  *tree.EvalContext
+	txn       *client.Txn
+	fkTables  FkTableMetadata
+	alloc     *sqlbase.DatumAlloc
+	evalCtx   *tree.EvalContext
+	fkChecker *FKChecker
 
 	indexPKRowFetchers map[TableID]map[sqlbase.IndexID]Fetcher // PK RowFetchers by Table ID and Index ID
 
@@ -57,6 +58,7 @@ func makeDeleteCascader(
 	tablesByID FkTableMetadata,
 	evalCtx *tree.EvalContext,
 	alloc *sqlbase.DatumAlloc,
+	fkChecker *FKChecker,
 ) (*cascader, error) {
 	if evalCtx == nil {
 		return nil, pgerror.NewAssertionErrorf("evalContext is nil")
@@ -102,6 +104,7 @@ Outer:
 		updatedRows:        make(map[TableID]*rowcontainer.RowContainer),
 		evalCtx:            evalCtx,
 		alloc:              alloc,
+		fkChecker:          fkChecker,
 	}, nil
 }
 
@@ -114,6 +117,7 @@ func makeUpdateCascader(
 	updateCols []sqlbase.ColumnDescriptor,
 	evalCtx *tree.EvalContext,
 	alloc *sqlbase.DatumAlloc,
+	fkChecker *FKChecker,
 ) (*cascader, error) {
 	if evalCtx == nil {
 		return nil, pgerror.NewAssertionErrorf("evalContext is nil")
@@ -173,6 +177,7 @@ Outer:
 		updatedRows:        make(map[TableID]*rowcontainer.RowContainer),
 		evalCtx:            evalCtx,
 		alloc:              alloc,
+		fkChecker:          fkChecker,
 	}, nil
 }
 
@@ -418,6 +423,7 @@ func (c *cascader) addRowDeleter(
 		nil, /* requestedCol */
 		CheckFKs,
 		c.alloc,
+		c.fkChecker,
 	)
 	if err != nil {
 		return Deleter{}, Fetcher{}, err
@@ -478,6 +484,7 @@ func (c *cascader) addRowUpdater(
 		nil, /* requestedCol */
 		UpdaterDefault,
 		c.alloc,
+		c.fkChecker,
 	)
 	if err != nil {
 		return Updater{}, Fetcher{}, err
