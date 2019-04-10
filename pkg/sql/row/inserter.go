@@ -18,7 +18,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/cockroachdb/cockroach/pkg/internal/client"
 	"github.com/cockroachdb/cockroach/pkg/roachpb"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/tree"
 	"github.com/cockroachdb/cockroach/pkg/sql/sqlbase"
@@ -45,12 +44,9 @@ type Inserter struct {
 //
 // insertCols must contain every column in the primary key.
 func MakeInserter(
-	txn *client.Txn,
 	tableDesc *sqlbase.ImmutableTableDescriptor,
-	fkTables FkTableMetadata,
 	insertCols []sqlbase.ColumnDescriptor,
 	checkFKs checkFKConstraints,
-	alloc *sqlbase.DatumAlloc,
 	fkChecker *FKChecker,
 ) (Inserter, error) {
 	ri := Inserter{

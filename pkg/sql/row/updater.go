@@ -203,9 +203,7 @@ func makeUpdaterWithoutCascader(
 		}
 		ru.FetchCols = ru.rd.FetchCols
 		ru.FetchColIDtoRowIndex = ColIDtoRowIndexFromCols(ru.FetchCols)
-		if ru.ri, err = MakeInserter(
-			txn, tableDesc, fkTables, tableCols, SkipFKs, alloc, fkChecker,
-		); err != nil {
+		if ru.ri, err = MakeInserter(tableDesc, tableCols, SkipFKs, fkChecker); err != nil {
 			return Updater{}, err
 		}
 	} else {

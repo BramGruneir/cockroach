@@ -274,9 +274,7 @@ func (p *planner) Insert(
 	}
 
 	// Create the table insert, which does the bulk of the work.
-	ri, err := row.MakeInserter(
-		p.txn, desc, fkTables, insertCols, row.CheckFKs, &p.alloc, fkChecker,
-	)
+	ri, err := row.MakeInserter(desc, insertCols, row.CheckFKs, fkChecker)
 	if err != nil {
 		return nil, err
 	}
