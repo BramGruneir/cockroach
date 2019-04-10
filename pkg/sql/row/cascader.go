@@ -417,12 +417,9 @@ func (c *cascader) addRowDeleter(
 	// Create the row deleter. The row deleter is needed prior to the row fetcher
 	// as it will dictate what columns are required in the row fetcher.
 	rowDeleter, err := makeRowDeleterWithoutCascader(
-		c.txn,
 		table,
-		c.fkTables,
 		nil, /* requestedCol */
 		CheckFKs,
-		c.alloc,
 		c.fkChecker,
 	)
 	if err != nil {

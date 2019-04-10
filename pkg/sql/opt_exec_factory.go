@@ -1431,14 +1431,7 @@ func (ef *execFactory) ConstructDelete(
 	// CBO will have already determined the set of fetch columns, and passes
 	// those sets into the deleter (which will basically be a no-op).
 	rd, err := row.MakeDeleter(
-		ef.planner.txn,
-		tabDesc,
-		fkTables,
-		fetchColDescs,
-		row.CheckFKs,
-		ef.planner.EvalContext(),
-		&ef.planner.alloc,
-		fkChecker,
+		tabDesc, fetchColDescs, row.CheckFKs, ef.planner.EvalContext(), fkChecker,
 	)
 	if err != nil {
 		return nil, err

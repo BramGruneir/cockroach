@@ -131,9 +131,7 @@ func (p *planner) Delete(
 	}
 
 	// Create the table deleter, which does the bulk of the work.
-	rd, err := row.MakeDeleter(
-		p.txn, desc, fkTables, requestedCols, row.CheckFKs, p.EvalContext(), &p.alloc, fkChecker,
-	)
+	rd, err := row.MakeDeleter(desc, requestedCols, row.CheckFKs, p.EvalContext(), fkChecker)
 	if err != nil {
 		return nil, err
 	}

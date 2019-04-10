@@ -43,25 +43,20 @@ type Deleter struct {
 // expectation of which values are passed as values to DeleteRow. Any column
 // passed in requestedCols will be included in FetchCols.
 func MakeDeleter(
-	txn *client.Txn,
 	tableDesc *sqlbase.ImmutableTableDescriptor,
-	fkTables FkTableMetadata,
 	requestedCols []sqlbase.ColumnDescriptor,
 	checkFKs checkFKConstraints,
 	evalCtx *tree.EvalContext,
-	alloc *sqlbase.DatumAlloc,
 	fkChecker *FKChecker,
 ) (Deleter, error) {
-	rowDeleter, err := makeRowDeleterWithoutCascader(
-		txn, tableDesc, fkTables, requestedCols, checkFKs, alloc, fkChecker,
-	)
+	rowDeleter, err := makeRowDeleterWithoutCascader(tableDesc, requestedCols, checkFKs, fkChecker)
 	if err != nil {
 		return Deleter{}, err
 	}
 	if checkFKs == CheckFKs {
 		var err error
 		rowDeleter.cascader, err = makeDeleteCascader(
-			txn, tableDesc, fkTables, evalCtx, alloc, fkChecker,
+			fkChecker.txn, tableDesc, fkChecker.fkTables, evalCtx, fkChecker.alloc, fkChecker,
 		)
 		if err != nil {
 			return Deleter{}, err
@@ -73,12 +68,9 @@ func MakeDeleter(
 // makeRowDeleterWithoutCascader creates a rowDeleter but does not create an
 // additional cascader.
 func makeRowDeleterWithoutCascader(
-	txn *client.Txn,
 	tableDesc *sqlbase.ImmutableTableDescriptor,
-	fkTables FkTableMetadata,
 	requestedCols []sqlbase.ColumnDescriptor,
 	checkFKs checkFKConstraints,
-	alloc *sqlbase.DatumAlloc,
 	fkChecker *FKChecker,
 ) (Deleter, error) {
 	indexes := tableDesc.DeletableIndexes()
