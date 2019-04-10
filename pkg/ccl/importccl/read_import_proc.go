@@ -195,6 +195,30 @@ func (b *byteCounter) Read(p []byte) (int, error) {
 
 type kvBatch []roachpb.KeyValue
 
+type inserter func(roachpb.KeyValue)
+
+func (i inserter) CPut(key, value, expValue interface{}) {
+	panic("unimplemented")
+}
+
+func (i inserter) Del(key ...interface{}) {
+	panic("unimplemented")
+}
+
+func (i inserter) Put(key, value interface{}) {
+	i(roachpb.KeyValue{
+		Key:   *key.(*roachpb.Key),
+		Value: *value.(*roachpb.Value),
+	})
+}
+
+func (i inserter) InitPut(key, value interface{}, failOnTombstones bool) {
+	i(roachpb.KeyValue{
+		Key:   *key.(*roachpb.Key),
+		Value: *value.(*roachpb.Value),
+	})
+}
+
 type rowConverter struct {
 	// current row buf
 	datums []tree.Datum

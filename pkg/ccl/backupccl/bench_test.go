@@ -10,16 +10,13 @@ package backupccl_test
 
 import (
 	"bytes"
-	gosql "database/sql"
 	"fmt"
 	"io"
 	"path/filepath"
 	"strings"
 	"testing"
 
-	"github.com/cockroachdb/cockroach/pkg/ccl/importccl"
 	"github.com/cockroachdb/cockroach/pkg/ccl/utilccl/sampledataccl"
-	"github.com/cockroachdb/cockroach/pkg/util/hlc"
 	"github.com/cockroachdb/cockroach/pkg/workload"
 	"github.com/cockroachdb/cockroach/pkg/workload/bank"
 )
@@ -91,29 +88,6 @@ func BenchmarkClusterRestore(b *testing.B) {
 
 	b.ResetTimer()
 	sqlDB.Exec(b, `RESTORE data.* FROM 'nodelocal:///foo'`)
-	b.StopTimer()
-}
-
-func BenchmarkLoadRestore(b *testing.B) {
-	if testing.Short() {
-		b.Skip("TODO: fix benchmark")
-	}
-	// NB: This benchmark takes liberties in how b.N is used compared to the go
-	// documentation's description. We're getting useful information out of it,
-	// but this is not a pattern to cargo-cult.
-
-	ctx, _, sqlDB, dir, cleanup := backupRestoreTestSetup(b, multiNode, 0, initNone)
-	defer cleanup()
-	sqlDB.Exec(b, `DROP TABLE data.bank`)
-
-	buf := bankBuf(b.N)
-	b.SetBytes(int64(buf.Len() / b.N))
-	ts := hlc.Timestamp{WallTime: hlc.UnixNano()}
-	b.ResetTimer()
-	if _, err := importccl.Load(ctx, sqlDB.DB.(*gosql.DB), buf, "data", dir, ts, 0, dir); err != nil {
-		b.Fatalf("%+v", err)
-	}
-	sqlDB.Exec(b, fmt.Sprintf(`RESTORE data.* FROM '%s'`, dir))
 	b.StopTimer()
 }
 
