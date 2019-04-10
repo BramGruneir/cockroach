@@ -66,6 +66,7 @@ type fkExistenceCheckForUpdate struct {
 }
 
 // makeFkExistenceCheckHelperForUpdate instantiates an update helper.
+// TODO(bram): FIX THIS ****************
 func makeFkExistenceCheckHelperForUpdate(
 	txn *client.Txn,
 	table *sqlbase.ImmutableTableDescriptor,

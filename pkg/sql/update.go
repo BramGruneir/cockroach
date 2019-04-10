@@ -118,7 +118,6 @@ func (p *planner) Update(
 	if err != nil {
 		return nil, err
 	}
-
 	fkChecker := row.MakeFKChecker(p.txn, fkTables, &p.alloc)
 
 	// Extract all the LHS column names, and verify that the arity of
@@ -216,15 +215,7 @@ func (p *planner) Update(
 	// columns in the table descriptor + any columns currently in the
 	// process of being added.
 	ru, err := row.MakeUpdater(
-		p.txn,
-		desc,
-		fkTables,
-		updateCols,
-		requestedCols,
-		row.UpdaterDefault,
-		p.EvalContext(),
-		&p.alloc,
-		fkChecker,
+		desc, updateCols, requestedCols, row.UpdaterDefault, p.EvalContext(), fkChecker,
 	)
 	if err != nil {
 		return nil, err

@@ -67,7 +67,7 @@ type optTableUpserter struct {
 	fkTables row.FkTableMetadata
 
 	// fkChecker is used to gather and execute all foreign key checks.
-	fkChecker row.FKChecker
+	fkChecker *row.FKChecker
 
 	// ru is used when updating rows.
 	ru row.Updater
@@ -85,15 +85,7 @@ func (tu *optTableUpserter) init(txn *client.Txn, evalCtx *tree.EvalContext) err
 	}
 
 	tu.ru, err = row.MakeUpdater(
-		txn,
-		tu.tableDesc(),
-		tu.fkTables,
-		tu.updateCols,
-		tu.fetchCols,
-		row.UpdaterDefault,
-		evalCtx,
-		tu.alloc,
-		&tu.fkChecker,
+		tu.tableDesc(), tu.updateCols, tu.fetchCols, row.UpdaterDefault, evalCtx, tu.fkChecker,
 	)
 	return err
 }

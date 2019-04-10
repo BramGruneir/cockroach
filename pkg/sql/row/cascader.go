@@ -474,13 +474,10 @@ func (c *cascader) addRowUpdater(
 	// Create the row updater. The row updater requires all the columns in the
 	// table.
 	rowUpdater, err := makeUpdaterWithoutCascader(
-		c.txn,
 		table,
-		c.fkTables,
 		table.Columns,
 		nil, /* requestedCol */
 		UpdaterDefault,
-		c.alloc,
 		c.fkChecker,
 	)
 	if err != nil {
