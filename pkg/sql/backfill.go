@@ -450,13 +450,10 @@ func (sc *SchemaChanger) truncateIndexes(
 
 				fkChecker := row.MakeFKChecker(txn, nil, alloc)
 				rd, err := row.MakeDeleter(
-					txn,
 					tableDesc,
-					nil, /* fkTables */
 					nil, /* requestedCols */
 					row.SkipFKs,
 					nil, /* *tree.EvalContext */
-					alloc,
 					fkChecker,
 				)
 				if err != nil {
@@ -1252,13 +1249,10 @@ func indexTruncateInTxn(
 	var sp roachpb.Span
 	for done := false; !done; done = sp.Key == nil {
 		rd, err := row.MakeDeleter(
-			txn,
 			tableDesc,
-			nil, /* fkTables */
 			nil, /* requestedCols */
 			row.SkipFKs,
 			nil, /* *tree.EvalContext */
-			alloc,
 			fkChecker,
 		)
 		if err != nil {

@@ -197,7 +197,7 @@ func makeUpdaterWithoutCascader(
 		// them, so request them all.
 		var err error
 		if ru.rd, err = makeRowDeleterWithoutCascader(
-			txn, tableDesc, fkTables, tableCols, SkipFKs, alloc, fkChecker,
+			tableDesc, tableCols, SkipFKs, fkChecker,
 		); err != nil {
 			return Updater{}, err
 		}
