@@ -261,9 +261,7 @@ func makeUpdaterWithoutCascader(
 	}
 
 	var err error
-	if ru.Fks, err = makeFkExistenceCheckHelperForUpdate(
-		fkChecker.txn, tableDesc, fkChecker.fkTables, ru.FetchColIDtoRowIndex, fkChecker.alloc,
-	); err != nil {
+	if ru.Fks, err = fkChecker.addUpdateChecker(tableDesc, ru.FetchColIDtoRowIndex); err != nil {
 		return Updater{}, err
 	}
 	return ru, nil
