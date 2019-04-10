@@ -218,12 +218,9 @@ func (n *createTableNode) startExec(params runParams) error {
 		// Instantiate a row inserter and table writer. It has a 1-1
 		// mapping to the definitions in the descriptor.
 		ri, err := row.MakeInserter(
-			params.p.txn,
 			sqlbase.NewImmutableTableDescriptor(*desc.TableDesc()),
-			nil,
 			desc.Columns,
 			row.SkipFKs,
-			&params.p.alloc,
 			nil, /* fkChecker */
 		)
 		if err != nil {

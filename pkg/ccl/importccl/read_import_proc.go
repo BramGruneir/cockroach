@@ -228,15 +228,7 @@ func newRowConverter(
 		evalCtx:   evalCtx,
 	}
 
-	ri, err := row.MakeInserter(
-		nil, /* txn */
-		immutDesc,
-		nil, /* fkTables */
-		immutDesc.Columns,
-		row.SkipFKs,
-		&sqlbase.DatumAlloc{},
-		nil, /* fkChecker */
-	)
+	ri, err := row.MakeInserter(immutDesc, immutDesc.Columns, row.SkipFKs, nil /* fkChecker */)
 	if err != nil {
 		return nil, pgerror.Wrap(err, pgerror.CodeDataExceptionError, "make row inserter")
 	}

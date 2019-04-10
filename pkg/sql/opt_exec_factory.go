@@ -1124,9 +1124,7 @@ func (ef *execFactory) ConstructInsert(
 	fkChecker := row.MakeFKChecker(ef.planner.txn, fkTables, &ef.planner.alloc)
 
 	// Create the table insert, which does the bulk of the work.
-	ri, err := row.MakeInserter(
-		ef.planner.txn, tabDesc, fkTables, colDescs, row.CheckFKs, &ef.planner.alloc, fkChecker,
-	)
+	ri, err := row.MakeInserter(tabDesc, colDescs, row.CheckFKs, fkChecker)
 	if err != nil {
 		return nil, err
 	}
@@ -1323,9 +1321,7 @@ func (ef *execFactory) ConstructUpsert(
 	fkChecker := row.MakeFKChecker(ef.planner.txn, fkTables, &ef.planner.alloc)
 
 	// Create the table inserter, which does the bulk of the insert-related work.
-	ri, err := row.MakeInserter(
-		ef.planner.txn, tabDesc, fkTables, insertColDescs, row.CheckFKs, &ef.planner.alloc, fkChecker,
-	)
+	ri, err := row.MakeInserter(tabDesc, insertColDescs, row.CheckFKs, fkChecker)
 	if err != nil {
 		return nil, err
 	}
