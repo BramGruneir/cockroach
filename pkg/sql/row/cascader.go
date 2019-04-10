@@ -17,7 +17,6 @@ package row
 import (
 	"context"
 
-	"github.com/cockroachdb/cockroach/pkg/internal/client"
 	"github.com/cockroachdb/cockroach/pkg/roachpb"
 	"github.com/cockroachdb/cockroach/pkg/sql/parser"
 	"github.com/cockroachdb/cockroach/pkg/sql/pgwire/pgerror"
@@ -30,9 +29,6 @@ import (
 
 // cascader is used to handle all referential integrity cascading actions.
 type cascader struct {
-	txn       *client.Txn
-	fkTables  FkTableMetadata
-	alloc     *sqlbase.DatumAlloc
 	evalCtx   *tree.EvalContext
 	fkChecker *FKChecker
 
@@ -53,12 +49,7 @@ type cascader struct {
 // makeDeleteCascader only creates a cascader if there is a chance that there is
 // a possible cascade. It returns a cascader if one is required and nil if not.
 func makeDeleteCascader(
-	txn *client.Txn,
-	table *sqlbase.ImmutableTableDescriptor,
-	tablesByID FkTableMetadata,
-	evalCtx *tree.EvalContext,
-	alloc *sqlbase.DatumAlloc,
-	fkChecker *FKChecker,
+	fkChecker *FKChecker, table *sqlbase.ImmutableTableDescriptor, evalCtx *tree.EvalContext,
 ) (*cascader, error) {
 	if evalCtx == nil {
 		return nil, pgerror.NewAssertionErrorf("evalContext is nil")
@@ -67,7 +58,7 @@ func makeDeleteCascader(
 Outer:
 	for _, referencedIndex := range table.AllNonDropIndexes() {
 		for _, ref := range referencedIndex.ReferencedBy {
-			referencingTable, ok := tablesByID[ref.Table]
+			referencingTable, ok := fkChecker.fkTables[ref.Table]
 			if !ok {
 				return nil, pgerror.NewAssertionErrorf("could not find table:%d in table descriptor map", ref.Table)
 			}
@@ -92,8 +83,7 @@ Outer:
 		return nil, nil
 	}
 	return &cascader{
-		txn:                txn,
-		fkTables:           tablesByID,
+		fkChecker:          fkChecker,
 		indexPKRowFetchers: make(map[TableID]map[sqlbase.IndexID]Fetcher),
 		rowDeleters:        make(map[TableID]Deleter),
 		deleterRowFetchers: make(map[TableID]Fetcher),
@@ -103,21 +93,16 @@ Outer:
 		originalRows:       make(map[TableID]*rowcontainer.RowContainer),
 		updatedRows:        make(map[TableID]*rowcontainer.RowContainer),
 		evalCtx:            evalCtx,
-		alloc:              alloc,
-		fkChecker:          fkChecker,
 	}, nil
 }
 
 // makeUpdateCascader only creates a cascader if there is a chance that there is
 // a possible cascade. It returns a cascader if one is required and nil if not.
 func makeUpdateCascader(
-	txn *client.Txn,
+	fkChecker *FKChecker,
 	table *sqlbase.ImmutableTableDescriptor,
-	tablesByID FkTableMetadata,
 	updateCols []sqlbase.ColumnDescriptor,
 	evalCtx *tree.EvalContext,
-	alloc *sqlbase.DatumAlloc,
-	fkChecker *FKChecker,
 ) (*cascader, error) {
 	if evalCtx == nil {
 		return nil, pgerror.NewAssertionErrorf("evalContext is nil")
@@ -140,7 +125,7 @@ Outer:
 			continue
 		}
 		for _, ref := range referencedIndex.ReferencedBy {
-			referencingTable, ok := tablesByID[ref.Table]
+			referencingTable, ok := fkChecker.fkTables[ref.Table]
 			if !ok {
 				return nil, pgerror.NewAssertionErrorf("could not find table:%d in table descriptor map", ref.Table)
 			}
@@ -165,8 +150,7 @@ Outer:
 		return nil, nil
 	}
 	return &cascader{
-		txn:                txn,
-		fkTables:           tablesByID,
+		fkChecker:          fkChecker,
 		indexPKRowFetchers: make(map[TableID]map[sqlbase.IndexID]Fetcher),
 		rowDeleters:        make(map[TableID]Deleter),
 		deleterRowFetchers: make(map[TableID]Fetcher),
@@ -176,8 +160,6 @@ Outer:
 		originalRows:       make(map[TableID]*rowcontainer.RowContainer),
 		updatedRows:        make(map[TableID]*rowcontainer.RowContainer),
 		evalCtx:            evalCtx,
-		alloc:              alloc,
-		fkChecker:          fkChecker,
 	}, nil
 }
 
@@ -382,7 +364,7 @@ func (c *cascader) addIndexPKRowFetcher(
 		false, /* reverse */
 		false, /* returnRangeInfo */
 		false, /* isCheck */
-		c.alloc,
+		c.fkChecker.alloc,
 		FetcherTableArgs{
 			Desc:             table,
 			Index:            index,
@@ -443,7 +425,7 @@ func (c *cascader) addRowDeleter(
 		false, /* reverse */
 		false, /* returnRangeInfo */
 		false, /* isCheck */
-		c.alloc,
+		c.fkChecker.alloc,
 		tableArgs,
 	); err != nil {
 		return Deleter{}, Fetcher{}, err
@@ -501,7 +483,7 @@ func (c *cascader) addRowUpdater(
 		false, /* reverse */
 		false, /* returnRangeInfo */
 		false, /* isCheck */
-		c.alloc,
+		c.fkChecker.alloc,
 		tableArgs,
 	); err != nil {
 		return Updater{}, Fetcher{}, err
@@ -543,7 +525,7 @@ func (c *cascader) deleteRows(
 	if len(req.Requests) == 0 {
 		return nil, nil, 0, nil
 	}
-	br, roachErr := c.txn.Send(ctx, req)
+	br, roachErr := c.fkChecker.txn.Send(ctx, req)
 	if roachErr != nil {
 		return nil, nil, 0, roachErr.GoError()
 	}
@@ -608,7 +590,7 @@ func (c *cascader) deleteRows(
 	if len(pkLookupReq.Requests) == 0 {
 		return nil, nil, 0, nil
 	}
-	pkResp, roachErr := c.txn.Send(ctx, pkLookupReq)
+	pkResp, roachErr := c.fkChecker.txn.Send(ctx, pkLookupReq)
 	if roachErr != nil {
 		return nil, nil, 0, roachErr.GoError()
 	}
@@ -631,7 +613,7 @@ func (c *cascader) deleteRows(
 	deletedRowsStartIndex := deletedRows.Len()
 
 	// Delete all the rows in a new batch.
-	batch := c.txn.NewBatch()
+	batch := c.fkChecker.txn.NewBatch()
 
 	for _, resp := range pkResp.Responses {
 		fetcher := SpanKVFetcher{
@@ -659,7 +641,7 @@ func (c *cascader) deleteRows(
 	}
 
 	// Run the batch.
-	if err := c.txn.Run(ctx, batch); err != nil {
+	if err := c.fkChecker.txn.Run(ctx, batch); err != nil {
 		return nil, nil, 0, ConvertBatchError(ctx, referencingTable, batch)
 	}
 
@@ -714,7 +696,7 @@ func (c *cascader) updateRows(
 	startIndex := originalRows.Len()
 
 	// Update all the rows in a new batch.
-	batch := c.txn.NewBatch()
+	batch := c.fkChecker.txn.NewBatch()
 
 	// Populate a map of all columns that need to be set if the action is not
 	// cascade.
@@ -774,7 +756,7 @@ func (c *cascader) updateRows(
 		if len(req.Requests) == 0 {
 			return nil, nil, nil, 0, nil
 		}
-		br, roachErr := c.txn.Send(ctx, req)
+		br, roachErr := c.fkChecker.txn.Send(ctx, req)
 		if roachErr != nil {
 			return nil, nil, nil, 0, roachErr.GoError()
 		}
@@ -833,7 +815,7 @@ func (c *cascader) updateRows(
 		if len(pkLookupReq.Requests) == 0 {
 			return nil, nil, nil, 0, nil
 		}
-		pkResp, roachErr := c.txn.Send(ctx, pkLookupReq)
+		pkResp, roachErr := c.fkChecker.txn.Send(ctx, pkLookupReq)
 		if roachErr != nil {
 			return nil, nil, nil, 0, roachErr.GoError()
 		}
@@ -866,7 +848,7 @@ func (c *cascader) updateRows(
 									return nil, nil, nil, 0, err
 								}
 								if !column.Nullable {
-									database, err := sqlbase.GetDatabaseDescFromID(ctx, c.txn, referencingTable.ParentID)
+									database, err := sqlbase.GetDatabaseDescFromID(ctx, c.fkChecker.txn, referencingTable.ParentID)
 									if err != nil {
 										return nil, nil, nil, 0, err
 									}
@@ -929,7 +911,7 @@ func (c *cascader) updateRows(
 			}
 		}
 	}
-	if err := c.txn.Run(ctx, batch); err != nil {
+	if err := c.fkChecker.txn.Run(ctx, batch); err != nil {
 		return nil, nil, nil, 0, ConvertBatchError(ctx, referencingTable, batch)
 	}
 
@@ -1037,7 +1019,7 @@ func (c *cascader) cascadeAll(
 		}
 		for _, referencedIndex := range elem.table.AllNonDropIndexes() {
 			for _, ref := range referencedIndex.ReferencedBy {
-				referencingTable, ok := c.fkTables[ref.Table]
+				referencingTable, ok := c.fkChecker.fkTables[ref.Table]
 				if !ok {
 					return pgerror.NewAssertionErrorf("could not find table:%d in table descriptor map", ref.Table)
 				}
@@ -1208,7 +1190,7 @@ func (c *cascader) cascadeAll(
 				return err
 			}
 			// Now check all check constraints for the table.
-			checkHelper := c.fkTables[tableID].CheckHelper
+			checkHelper := c.fkChecker.fkTables[tableID].CheckHelper
 			if checkHelper != nil {
 				if err := checkHelper.LoadEvalRow(rowUpdater.UpdateColIDtoRowIndex, updatedRows.At(0), false); err != nil {
 					return err
@@ -1251,7 +1233,7 @@ func (c *cascader) cascadeAll(
 				return err
 			}
 			// Now check all check constraints for the table.
-			checkHelper := c.fkTables[tableID].CheckHelper
+			checkHelper := c.fkChecker.fkTables[tableID].CheckHelper
 			if checkHelper != nil {
 				if err := checkHelper.LoadEvalRow(rowUpdater.UpdateColIDtoRowIndex, finalRow, false); err != nil {
 					return err

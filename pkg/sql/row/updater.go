@@ -89,9 +89,7 @@ func MakeUpdater(
 	if err != nil {
 		return Updater{}, err
 	}
-	rowUpdater.cascader, err = makeUpdateCascader(
-		fkChecker.txn, tableDesc, fkChecker.fkTables, updateCols, evalCtx, fkChecker.alloc, fkChecker,
-	)
+	rowUpdater.cascader, err = makeUpdateCascader(fkChecker, tableDesc, updateCols, evalCtx)
 	if err != nil {
 		return Updater{}, err
 	}
@@ -284,7 +282,7 @@ func (ru *Updater) UpdateRow(
 ) ([]tree.Datum, error) {
 	batch := b
 	if ru.cascader != nil {
-		batch = ru.cascader.txn.NewBatch()
+		batch = ru.cascader.fkChecker.txn.NewBatch()
 	}
 
 	if len(oldValues) != len(ru.FetchCols) {
@@ -361,7 +359,7 @@ func (ru *Updater) UpdateRow(
 		}
 
 		if ru.cascader != nil {
-			if err := ru.cascader.txn.Run(ctx, batch); err != nil {
+			if err := ru.cascader.fkChecker.txn.Run(ctx, batch); err != nil {
 				return nil, ConvertBatchError(ctx, ru.Helper.TableDesc, batch)
 			}
 			if err := ru.cascader.cascadeAll(
@@ -470,7 +468,7 @@ func (ru *Updater) UpdateRow(
 	}
 
 	if ru.cascader != nil {
-		if err := ru.cascader.txn.Run(ctx, batch); err != nil {
+		if err := ru.cascader.fkChecker.txn.Run(ctx, batch); err != nil {
 			return nil, ConvertBatchError(ctx, ru.Helper.TableDesc, batch)
 		}
 		if err := ru.cascader.cascadeAll(
