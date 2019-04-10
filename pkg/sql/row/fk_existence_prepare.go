@@ -97,7 +97,7 @@ func MakeFkMetadata(
 			}
 
 			if usage == CheckDeletes || usage == CheckUpdates {
-				// If the mutaiton performed is a deletion or an update,
+				// If the mutation performed is a deletion or an update,
 				// we'll need to do existence checks on the referencing
 				// table(s), if any, as well as cascading actions.
 				for _, ref := range idx.ReferencedBy {

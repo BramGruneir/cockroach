@@ -448,13 +448,12 @@ func (sc *SchemaChanger) truncateIndexes(
 					return err
 				}
 
-				fkChecker := row.MakeFKChecker(txn, nil, alloc)
 				rd, err := row.MakeDeleter(
 					tableDesc,
 					nil, /* requestedCols */
 					row.SkipFKs,
 					nil, /* *tree.EvalContext */
-					fkChecker,
+					nil, /* fkChecker */
 				)
 				if err != nil {
 					return err
@@ -1256,7 +1255,6 @@ func indexTruncateInTxn(
 ) error {
 	alloc := &sqlbase.DatumAlloc{}
 	idx := tableDesc.Mutations[0].GetIndex()
-	fkChecker := row.MakeFKChecker(txn, nil, alloc)
 	var sp roachpb.Span
 	for done := false; !done; done = sp.Key == nil {
 		rd, err := row.MakeDeleter(
@@ -1264,7 +1262,7 @@ func indexTruncateInTxn(
 			nil, /* requestedCols */
 			row.SkipFKs,
 			nil, /* *tree.EvalContext */
-			fkChecker,
+			nil, /* fkChecker */
 		)
 		if err != nil {
 			return err

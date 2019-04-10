@@ -15,8 +15,11 @@
 package row
 
 import (
+	"context"
+
 	"github.com/cockroachdb/cockroach/pkg/internal/client"
 	"github.com/cockroachdb/cockroach/pkg/sql/rowcontainer"
+	"github.com/cockroachdb/cockroach/pkg/sql/sem/tree"
 	"github.com/cockroachdb/cockroach/pkg/sql/sqlbase"
 )
 
@@ -36,11 +39,12 @@ type FKChecker struct {
 	txn      *client.Txn
 	fkTables FkTableMetadata
 	alloc    *sqlbase.DatumAlloc
+	evalCtx  *tree.EvalContext
 }
 
 // MakeFKChecker creates a Foreign Key Checker for use by a writer.
 func MakeFKChecker(
-	txn *client.Txn, fkTables FkTableMetadata, alloc *sqlbase.DatumAlloc,
+	txn *client.Txn, evalCtx *tree.EvalContext, fkTables FkTableMetadata, alloc *sqlbase.DatumAlloc,
 ) *FKChecker {
 	return &FKChecker{
 		deleteCheckers: make(map[TableID]fkExistenceCheckForDelete),
@@ -53,6 +57,7 @@ func MakeFKChecker(
 		txn:            txn,
 		fkTables:       fkTables,
 		alloc:          alloc,
+		evalCtx:        evalCtx,
 	}
 }
 
@@ -102,4 +107,60 @@ func (fk *FKChecker) addUpdateChecker(
 	}
 	fk.updateCheckers[table.ID] = updateChecker
 	return updateChecker, nil
+}
+
+func (fk *FKChecker) addDeletedRow(
+	ctx context.Context, tableID TableID, colTypeInfo sqlbase.ColTypeInfo, row tree.Datums,
+) error {
+	deletedRowContainer, exists := fk.deletedRows[tableID]
+	if !exists {
+		deletedRowContainer = rowcontainer.NewRowContainer(
+			fk.evalCtx.Mon.MakeBoundAccount(), colTypeInfo, 1,
+		)
+		fk.deletedRows[tableID] = deletedRowContainer
+	}
+	_, err := deletedRowContainer.AddRow(ctx, row)
+	return err
+}
+
+func (fk *FKChecker) addInsertedRow(
+	ctx context.Context, tableID TableID, colTypeInfo sqlbase.ColTypeInfo, row tree.Datums,
+) error {
+	insertedRowContainer, exists := fk.insertedRows[tableID]
+	if !exists {
+		insertedRowContainer = rowcontainer.NewRowContainer(
+			fk.evalCtx.Mon.MakeBoundAccount(), colTypeInfo, 1,
+		)
+		fk.insertedRows[tableID] = insertedRowContainer
+	}
+	_, err := insertedRowContainer.AddRow(ctx, row)
+	return err
+}
+
+func (fk *FKChecker) addUpdatedRow(
+	ctx context.Context,
+	tableID TableID,
+	colTypeInfo sqlbase.ColTypeInfo,
+	originalRow tree.Datums,
+	updatedRow tree.Datums,
+) error {
+	originalRowContainer, exists := fk.originalRows[tableID]
+	if !exists {
+		originalRowContainer = rowcontainer.NewRowContainer(
+			fk.evalCtx.Mon.MakeBoundAccount(), colTypeInfo, 1,
+		)
+		fk.originalRows[tableID] = originalRowContainer
+	}
+	updatedRowContainer, exists := fk.updatedRows[tableID]
+	if !exists {
+		updatedRowContainer = rowcontainer.NewRowContainer(
+			fk.evalCtx.Mon.MakeBoundAccount(), colTypeInfo, 1,
+		)
+		fk.updatedRows[tableID] = updatedRowContainer
+	}
+	if _, err := originalRowContainer.AddRow(ctx, originalRow); err != nil {
+		return err
+	}
+	_, err := updatedRowContainer.AddRow(ctx, updatedRow)
+	return err
 }

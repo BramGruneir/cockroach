@@ -110,7 +110,7 @@ func (p *planner) Delete(
 	if err != nil {
 		return nil, err
 	}
-	fkChecker := row.MakeFKChecker(p.txn, fkTables, &p.alloc)
+	fkChecker := row.MakeFKChecker(p.txn, p.EvalContext(), fkTables, &p.alloc)
 
 	// rowsNeeded will help determine whether we can use the fast path
 	// in startExec.

@@ -137,7 +137,7 @@ func (p *planner) Insert(
 		return nil, err
 	}
 
-	fkChecker := row.MakeFKChecker(p.txn, fkTables, &p.alloc)
+	fkChecker := row.MakeFKChecker(p.txn, p.EvalContext(), fkTables, &p.alloc)
 
 	// Determine which columns we're inserting into.
 	var insertCols []sqlbase.ColumnDescriptor

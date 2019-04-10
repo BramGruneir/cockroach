@@ -171,7 +171,7 @@ func (cb *ColumnBackfiller) RunColumnBackfillChunk(
 	requestedCols := make([]sqlbase.ColumnDescriptor, 0, len(tableDesc.Columns)+len(cb.added))
 	requestedCols = append(requestedCols, tableDesc.Columns...)
 	requestedCols = append(requestedCols, cb.added...)
-	fkChecker := row.MakeFKChecker(txn, fkTables, &cb.alloc)
+	fkChecker := row.MakeFKChecker(txn, cb.evalCtx, fkTables, &cb.alloc)
 	ru, err := row.MakeUpdater(
 		tableDesc, cb.updateCols, requestedCols, row.UpdaterOnlyColumns, cb.evalCtx, fkChecker,
 	)
