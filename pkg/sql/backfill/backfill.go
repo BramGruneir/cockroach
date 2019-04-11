@@ -173,14 +173,11 @@ func (cb *ColumnBackfiller) RunColumnBackfillChunk(
 	requestedCols = append(requestedCols, cb.added...)
 	fkChecker := row.MakeFKChecker(txn, fkTables, &cb.alloc)
 	ru, err := row.MakeUpdater(
-		txn,
 		tableDesc,
-		fkTables,
 		cb.updateCols,
 		requestedCols,
 		row.UpdaterOnlyColumns,
 		cb.evalCtx,
-		&cb.alloc,
 		fkChecker,
 	)
 	if err != nil {

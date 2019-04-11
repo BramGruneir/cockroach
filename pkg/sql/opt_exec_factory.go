@@ -1211,14 +1211,11 @@ func (ef *execFactory) ConstructUpdate(
 	// CBO will have already determined the set of fetch and update columns, and
 	// passes those sets into the updater (which will basically be a no-op).
 	ru, err := row.MakeUpdater(
-		ef.planner.txn,
 		tabDesc,
-		fkTables,
 		updateColDescs,
 		fetchColDescs,
 		row.UpdaterDefault,
 		ef.planner.EvalContext(),
-		&ef.planner.alloc,
 		fkChecker,
 	)
 	if err != nil {
@@ -1332,14 +1329,11 @@ func (ef *execFactory) ConstructUpsert(
 	// columns, and passes those sets into the updater (which will basically be a
 	// no-op).
 	ru, err := row.MakeUpdater(
-		ef.planner.txn,
 		tabDesc,
-		fkTables,
 		updateColDescs,
 		fetchColDescs,
 		row.UpdaterDefault,
 		ef.planner.EvalContext(),
-		&ef.planner.alloc,
 		fkChecker,
 	)
 	if err != nil {

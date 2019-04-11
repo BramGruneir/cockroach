@@ -216,14 +216,11 @@ func (p *planner) Update(
 	// columns in the table descriptor + any columns currently in the
 	// process of being added.
 	ru, err := row.MakeUpdater(
-		p.txn,
 		desc,
-		fkTables,
 		updateCols,
 		requestedCols,
 		row.UpdaterDefault,
 		p.EvalContext(),
-		&p.alloc,
 		fkChecker,
 	)
 	if err != nil {

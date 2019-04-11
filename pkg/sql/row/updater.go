@@ -76,24 +76,21 @@ const (
 // expectation of which values are passed as oldValues to UpdateRow. All the columns
 // passed in requestedCols will be included in FetchCols at the beginning.
 func MakeUpdater(
-	txn *client.Txn,
 	tableDesc *sqlbase.ImmutableTableDescriptor,
-	fkTables FkTableMetadata,
 	updateCols []sqlbase.ColumnDescriptor,
 	requestedCols []sqlbase.ColumnDescriptor,
 	updateType rowUpdaterType,
 	evalCtx *tree.EvalContext,
-	alloc *sqlbase.DatumAlloc,
 	fkChecker *FKChecker,
 ) (Updater, error) {
 	rowUpdater, err := makeUpdaterWithoutCascader(
-		txn, tableDesc, fkTables, updateCols, requestedCols, updateType, alloc, fkChecker,
+		tableDesc, updateCols, requestedCols, updateType, fkChecker,
 	)
 	if err != nil {
 		return Updater{}, err
 	}
 	rowUpdater.cascader, err = makeUpdateCascader(
-		txn, tableDesc, fkTables, updateCols, evalCtx, alloc, fkChecker,
+		fkChecker.txn, tableDesc, fkChecker.fkTables, updateCols, evalCtx, fkChecker.alloc, fkChecker,
 	)
 	if err != nil {
 		return Updater{}, err
@@ -110,13 +107,10 @@ var returnTruePseudoError error = returnTrue{}
 // makeUpdaterWithoutCascader is the same function as MakeUpdater but does not
 // create a cascader.
 func makeUpdaterWithoutCascader(
-	txn *client.Txn,
 	tableDesc *sqlbase.ImmutableTableDescriptor,
-	fkTables FkTableMetadata,
 	updateCols []sqlbase.ColumnDescriptor,
 	requestedCols []sqlbase.ColumnDescriptor,
 	updateType rowUpdaterType,
-	alloc *sqlbase.DatumAlloc,
 	fkChecker *FKChecker,
 ) (Updater, error) {
 	updateColIDtoRowIndex := ColIDtoRowIndexFromCols(updateCols)
@@ -267,8 +261,9 @@ func makeUpdaterWithoutCascader(
 	}
 
 	var err error
-	if ru.Fks, err = makeFkExistenceCheckHelperForUpdate(txn, tableDesc, fkTables,
-		ru.FetchColIDtoRowIndex, alloc); err != nil {
+	if ru.Fks, err = makeFkExistenceCheckHelperForUpdate(
+		fkChecker.txn, tableDesc, fkChecker.fkTables, ru.FetchColIDtoRowIndex, fkChecker.alloc,
+	); err != nil {
 		return Updater{}, err
 	}
 	return ru, nil
