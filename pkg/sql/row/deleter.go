@@ -55,7 +55,7 @@ func MakeDeleter(
 	}
 	if checkFKs == CheckFKs {
 		var err error
-		rowDeleter.cascader, err = makeDeleteCascader(fkChecker, tableDesc, evalCtx)
+		rowDeleter.cascader, err = makeDeleteCascader(fkChecker, tableDesc)
 		if err != nil {
 			return Deleter{}, err
 		}

@@ -29,7 +29,6 @@ import (
 
 // cascader is used to handle all referential integrity cascading actions.
 type cascader struct {
-	evalCtx   *tree.EvalContext
 	fkChecker *FKChecker
 
 	indexPKRowFetchers map[TableID]map[sqlbase.IndexID]Fetcher // PK RowFetchers by Table ID and Index ID
@@ -49,10 +48,16 @@ type cascader struct {
 // makeDeleteCascader only creates a cascader if there is a chance that there is
 // a possible cascade. It returns a cascader if one is required and nil if not.
 func makeDeleteCascader(
-	fkChecker *FKChecker, table *sqlbase.ImmutableTableDescriptor, evalCtx *tree.EvalContext,
+	fkChecker *FKChecker, table *sqlbase.ImmutableTableDescriptor,
 ) (*cascader, error) {
-	if evalCtx == nil {
+	if fkChecker == nil {
+		return nil, pgerror.NewAssertionErrorf("fkChecker is nil")
+	}
+	if fkChecker.evalCtx == nil {
 		return nil, pgerror.NewAssertionErrorf("evalContext is nil")
+	}
+	if fkChecker.alloc == nil {
+		return nil, pgerror.NewAssertionErrorf("alloc is nil")
 	}
 	var required bool
 Outer:
@@ -92,7 +97,6 @@ Outer:
 		updaterRowFetchers: make(map[TableID]Fetcher),
 		originalRows:       make(map[TableID]*rowcontainer.RowContainer),
 		updatedRows:        make(map[TableID]*rowcontainer.RowContainer),
-		evalCtx:            evalCtx,
 	}, nil
 }
 
@@ -102,10 +106,15 @@ func makeUpdateCascader(
 	fkChecker *FKChecker,
 	table *sqlbase.ImmutableTableDescriptor,
 	updateCols []sqlbase.ColumnDescriptor,
-	evalCtx *tree.EvalContext,
 ) (*cascader, error) {
-	if evalCtx == nil {
+	if fkChecker == nil {
+		return nil, pgerror.NewAssertionErrorf("fkChecker is nil")
+	}
+	if fkChecker.evalCtx == nil {
 		return nil, pgerror.NewAssertionErrorf("evalContext is nil")
+	}
+	if fkChecker.alloc == nil {
+		return nil, pgerror.NewAssertionErrorf("alloc is nil")
 	}
 	var required bool
 	colIDs := make(map[sqlbase.ColumnID]struct{})
@@ -159,7 +168,6 @@ Outer:
 		updaterRowFetchers: make(map[TableID]Fetcher),
 		originalRows:       make(map[TableID]*rowcontainer.RowContainer),
 		updatedRows:        make(map[TableID]*rowcontainer.RowContainer),
-		evalCtx:            evalCtx,
 	}, nil
 }
 
@@ -544,7 +552,7 @@ func (c *cascader) deleteRows(
 		return nil, nil, 0, err
 	}
 	primaryKeysToDelete := rowcontainer.NewRowContainer(
-		c.evalCtx.Mon.MakeBoundAccount(), pkColTypeInfo, values.originalValues.Len(),
+		c.fkChecker.evalCtx.Mon.MakeBoundAccount(), pkColTypeInfo, values.originalValues.Len(),
 	)
 	defer primaryKeysToDelete.Close(ctx)
 
@@ -606,7 +614,7 @@ func (c *cascader) deleteRows(
 			return nil, nil, 0, err
 		}
 		c.deletedRows[referencingTable.ID] = rowcontainer.NewRowContainer(
-			c.evalCtx.Mon.MakeBoundAccount(), colTypeInfo, primaryKeysToDelete.Len(),
+			c.fkChecker.evalCtx.Mon.MakeBoundAccount(), colTypeInfo, primaryKeysToDelete.Len(),
 		)
 	}
 	deletedRows := c.deletedRows[referencingTable.ID]
@@ -685,10 +693,10 @@ func (c *cascader) updateRows(
 			return nil, nil, nil, 0, err
 		}
 		c.originalRows[referencingTable.ID] = rowcontainer.NewRowContainer(
-			c.evalCtx.Mon.MakeBoundAccount(), colTypeInfo, values.originalValues.Len(),
+			c.fkChecker.evalCtx.Mon.MakeBoundAccount(), colTypeInfo, values.originalValues.Len(),
 		)
 		c.updatedRows[referencingTable.ID] = rowcontainer.NewRowContainer(
-			c.evalCtx.Mon.MakeBoundAccount(), colTypeInfo, values.originalValues.Len(),
+			c.fkChecker.evalCtx.Mon.MakeBoundAccount(), colTypeInfo, values.originalValues.Len(),
 		)
 	}
 	originalRows := c.originalRows[referencingTable.ID]
@@ -722,11 +730,11 @@ func (c *cascader) updateRows(
 			if err != nil {
 				return nil, nil, nil, 0, err
 			}
-			normalizedExpr, err := c.evalCtx.NormalizeExpr(typedExpr)
+			normalizedExpr, err := c.fkChecker.evalCtx.NormalizeExpr(typedExpr)
 			if err != nil {
 				return nil, nil, nil, 0, err
 			}
-			referencingIndexValuesByColIDs[columnID], err = normalizedExpr.Eval(c.evalCtx)
+			referencingIndexValuesByColIDs[columnID], err = normalizedExpr.Eval(c.fkChecker.evalCtx)
 			if err != nil {
 				return nil, nil, nil, 0, err
 			}
@@ -775,7 +783,7 @@ func (c *cascader) updateRows(
 			return nil, nil, nil, 0, err
 		}
 		primaryKeysToUpdate := rowcontainer.NewRowContainer(
-			c.evalCtx.Mon.MakeBoundAccount(), pkColTypeInfo, values.originalValues.Len(),
+			c.fkChecker.evalCtx.Mon.MakeBoundAccount(), pkColTypeInfo, values.originalValues.Len(),
 		)
 		defer primaryKeysToUpdate.Close(ctx)
 
@@ -887,7 +895,7 @@ func (c *cascader) updateRows(
 				}
 
 				// Is there something to update?  If not, skip it.
-				if !rowToUpdate.IsDistinctFrom(c.evalCtx, updateRow) {
+				if !rowToUpdate.IsDistinctFrom(c.fkChecker.evalCtx, updateRow) {
 					continue
 				}
 
@@ -986,7 +994,7 @@ func (c *cascader) cascadeAll(
 		return err
 	}
 	originalRowContainer := rowcontainer.NewRowContainer(
-		c.evalCtx.Mon.MakeBoundAccount(), colTypeInfo, len(originalValues),
+		c.fkChecker.evalCtx.Mon.MakeBoundAccount(), colTypeInfo, len(originalValues),
 	)
 	defer originalRowContainer.Close(ctx)
 	if _, err := originalRowContainer.AddRow(ctx, originalValues); err != nil {
@@ -995,7 +1003,7 @@ func (c *cascader) cascadeAll(
 	var updatedRowContainer *rowcontainer.RowContainer
 	if updatedValues != nil {
 		updatedRowContainer = rowcontainer.NewRowContainer(
-			c.evalCtx.Mon.MakeBoundAccount(), colTypeInfo, len(updatedValues),
+			c.fkChecker.evalCtx.Mon.MakeBoundAccount(), colTypeInfo, len(updatedValues),
 		)
 		defer updatedRowContainer.Close(ctx)
 		if _, err := updatedRowContainer.AddRow(ctx, updatedValues); err != nil {
@@ -1195,7 +1203,7 @@ func (c *cascader) cascadeAll(
 				if err := checkHelper.LoadEvalRow(rowUpdater.UpdateColIDtoRowIndex, updatedRows.At(0), false); err != nil {
 					return err
 				}
-				if err := checkHelper.CheckEval(c.evalCtx); err != nil {
+				if err := checkHelper.CheckEval(c.fkChecker.evalCtx); err != nil {
 					return err
 				}
 			}
@@ -1216,7 +1224,7 @@ func (c *cascader) cascadeAll(
 				if _, exists := skipList[j]; exists {
 					continue
 				}
-				if !originalRows.At(j).IsDistinctFrom(c.evalCtx, finalRow) {
+				if !originalRows.At(j).IsDistinctFrom(c.fkChecker.evalCtx, finalRow) {
 					// The row has been updated again.
 					finalRow = updatedRows.At(j)
 					skipList[j] = struct{}{}
@@ -1238,7 +1246,7 @@ func (c *cascader) cascadeAll(
 				if err := checkHelper.LoadEvalRow(rowUpdater.UpdateColIDtoRowIndex, finalRow, false); err != nil {
 					return err
 				}
-				if err := checkHelper.CheckEval(c.evalCtx); err != nil {
+				if err := checkHelper.CheckEval(c.fkChecker.evalCtx); err != nil {
 					return err
 				}
 			}

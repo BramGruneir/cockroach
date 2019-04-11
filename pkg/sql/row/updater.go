@@ -89,7 +89,7 @@ func MakeUpdater(
 	if err != nil {
 		return Updater{}, err
 	}
-	rowUpdater.cascader, err = makeUpdateCascader(fkChecker, tableDesc, updateCols, evalCtx)
+	rowUpdater.cascader, err = makeUpdateCascader(fkChecker, tableDesc, updateCols)
 	if err != nil {
 		return Updater{}, err
 	}
