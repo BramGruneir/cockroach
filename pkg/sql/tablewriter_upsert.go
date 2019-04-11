@@ -297,7 +297,7 @@ func (tu *tableUpserter) init(txn *client.Txn, evalCtx *tree.EvalContext) error 
 		tu.fetchColIDtoRowIndex = row.ColIDtoRowIndexFromCols(requestedCols)
 	} else {
 		tu.ru, err = row.MakeUpdater(
-			tableDesc, tu.updateCols, requestedCols, row.UpdaterDefault, evalCtx, tu.fkChecker,
+			tableDesc, tu.updateCols, requestedCols, row.UpdaterDefault, tu.fkChecker,
 		)
 		if err != nil {
 			return err

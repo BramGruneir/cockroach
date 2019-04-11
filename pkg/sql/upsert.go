@@ -60,6 +60,7 @@ func (p *planner) newUpsertNode(
 	computeExprs []tree.TypedExpr,
 	computedCols []sqlbase.ColumnDescriptor,
 	fkTables row.FkTableMetadata,
+	fkChecker *row.FKChecker,
 	desiredTypes []types.T,
 ) (res batchedPlanNode, err error) {
 	// Extract the index that will detect upsert conflicts
@@ -219,6 +220,7 @@ func (p *planner) newUpsertNode(
 				},
 				anyComputed:   len(computeExprs) >= 0,
 				fkTables:      fkTables,
+				fkChecker:     fkChecker,
 				updateCols:    updateCols,
 				conflictIndex: *conflictIndex,
 				evaler:        helper,

@@ -214,9 +214,7 @@ func (p *planner) Update(
 	// As a result of MakeUpdater, ru.FetchCols include all the
 	// columns in the table descriptor + any columns currently in the
 	// process of being added.
-	ru, err := row.MakeUpdater(
-		desc, updateCols, requestedCols, row.UpdaterDefault, p.EvalContext(), fkChecker,
-	)
+	ru, err := row.MakeUpdater(desc, updateCols, requestedCols, row.UpdaterDefault, fkChecker)
 	if err != nil {
 		return nil, err
 	}

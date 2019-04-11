@@ -136,7 +136,6 @@ func (p *planner) Insert(
 	if err != nil {
 		return nil, err
 	}
-
 	fkChecker := row.MakeFKChecker(p.txn, p.EvalContext(), fkTables, &p.alloc)
 
 	// Determine which columns we're inserting into.
@@ -299,7 +298,8 @@ func (p *planner) Insert(
 		// The upsert path has a separate constructor.
 		node, err = p.newUpsertNode(
 			ctx, n, desc, ri, tn, alias, rows, rowsNeeded, columns,
-			defaultExprs, computeExprs, computedCols, fkTables, desiredTypes)
+			defaultExprs, computeExprs, computedCols, fkTables, fkChecker, desiredTypes,
+		)
 		if err != nil {
 			return nil, err
 		}

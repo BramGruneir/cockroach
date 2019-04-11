@@ -85,7 +85,7 @@ func (tu *optTableUpserter) init(txn *client.Txn, evalCtx *tree.EvalContext) err
 	}
 
 	tu.ru, err = row.MakeUpdater(
-		tu.tableDesc(), tu.updateCols, tu.fetchCols, row.UpdaterDefault, evalCtx, tu.fkChecker,
+		tu.tableDesc(), tu.updateCols, tu.fetchCols, row.UpdaterDefault, tu.fkChecker,
 	)
 	return err
 }

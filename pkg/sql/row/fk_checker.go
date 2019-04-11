@@ -25,6 +25,7 @@ import (
 
 // FKChecker stores all foreign key checks so they can be executed on a per
 // statement instead of per row basis.
+// TODO(bram): Should this move under fkTables or vice versa?
 type FKChecker struct {
 	deleteCheckers map[TableID]fkExistenceCheckForDelete
 	deletedRows    map[TableID]*rowcontainer.RowContainer // Rows that have been deleted by Table ID

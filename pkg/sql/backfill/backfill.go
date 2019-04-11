@@ -173,7 +173,7 @@ func (cb *ColumnBackfiller) RunColumnBackfillChunk(
 	requestedCols = append(requestedCols, cb.added...)
 	fkChecker := row.MakeFKChecker(txn, cb.evalCtx, fkTables, &cb.alloc)
 	ru, err := row.MakeUpdater(
-		tableDesc, cb.updateCols, requestedCols, row.UpdaterOnlyColumns, cb.evalCtx, fkChecker,
+		tableDesc, cb.updateCols, requestedCols, row.UpdaterOnlyColumns, fkChecker,
 	)
 	if err != nil {
 		return roachpb.Key{}, err

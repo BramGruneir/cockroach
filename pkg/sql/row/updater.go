@@ -80,7 +80,6 @@ func MakeUpdater(
 	updateCols []sqlbase.ColumnDescriptor,
 	requestedCols []sqlbase.ColumnDescriptor,
 	updateType rowUpdaterType,
-	evalCtx *tree.EvalContext,
 	fkChecker *FKChecker,
 ) (Updater, error) {
 	rowUpdater, err := makeUpdaterWithoutCascader(
