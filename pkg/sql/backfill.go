@@ -452,7 +452,6 @@ func (sc *SchemaChanger) truncateIndexes(
 					tableDesc,
 					nil, /* requestedCols */
 					row.SkipFKs,
-					nil, /* *tree.EvalContext */
 					nil, /* fkChecker */
 				)
 				if err != nil {
@@ -1261,7 +1260,6 @@ func indexTruncateInTxn(
 			tableDesc,
 			nil, /* requestedCols */
 			row.SkipFKs,
-			nil, /* *tree.EvalContext */
 			nil, /* fkChecker */
 		)
 		if err != nil {

@@ -504,7 +504,6 @@ func truncateTableInChunks(
 				sqlbase.NewImmutableTableDescriptor(*tableDesc),
 				nil, /* requestedCol */
 				row.SkipFKs,
-				nil, /* *tree.EvalContext */
 				nil, /* fkChecker*/
 			)
 			if err != nil {

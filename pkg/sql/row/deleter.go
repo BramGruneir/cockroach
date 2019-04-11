@@ -46,7 +46,6 @@ func MakeDeleter(
 	tableDesc *sqlbase.ImmutableTableDescriptor,
 	requestedCols []sqlbase.ColumnDescriptor,
 	checkFKs checkFKConstraints,
-	evalCtx *tree.EvalContext,
 	fkChecker *FKChecker,
 ) (Deleter, error) {
 	rowDeleter, err := makeRowDeleterWithoutCascader(tableDesc, requestedCols, checkFKs, fkChecker)
