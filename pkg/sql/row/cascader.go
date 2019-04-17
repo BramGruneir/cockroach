@@ -469,6 +469,7 @@ func (c *cascader) addRowUpdater(
 		nil, /* requestedCol */
 		UpdaterDefault,
 		c.fkChecker,
+		false, /* base */
 	)
 	if err != nil {
 		return Updater{}, Fetcher{}, err

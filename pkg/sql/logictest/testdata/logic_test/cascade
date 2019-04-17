@@ -1703,12 +1703,33 @@ INSERT INTO self_x2 (x, y, z) VALUES ('pk1', NULL, NULL);
 INSERT INTO self_x2 (x, y, z) VALUES ('pk2', 'pk1', NULL);
 INSERT INTO self_x2 (x, y, z) VALUES ('pk3', 'pk2', 'pk1');
 
+query TTT rowsort
+SELECT * FROM self_x2
+----
+pk1 NULL NULL
+pk2 pk1  NULL
+pk3 pk2  pk1
+
 # ON UPDATE CASCADE
 statement ok
 UPDATE self_x2 SET x = 'pk1-updated' WHERE x = 'pk1';
 
+query TTT rowsort
+SELECT * FROM self_x2
+----
+pk1-updated  NULL         NULL
+pk2          pk1-updated  NULL
+pk3          pk2          pk1-updated
+
 statement ok
 UPDATE self_x2 SET x = 'pk2-updated' WHERE x = 'pk2';
+
+query TTT rowsort
+SELECT * FROM self_x2
+----
+pk1-updated  NULL         NULL
+pk2-updated  pk1-updated  NULL
+pk3          pk2-updated  pk1-updated
 
 statement ok
 UPDATE self_x2 SET x = 'pk3-updated' WHERE x = 'pk3';
