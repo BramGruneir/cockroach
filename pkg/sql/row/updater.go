@@ -83,7 +83,7 @@ func MakeUpdater(
 	fkChecker *FKChecker,
 ) (Updater, error) {
 	rowUpdater, err := makeUpdaterWithoutCascader(
-		tableDesc, updateCols, requestedCols, updateType, fkChecker, true, /* base */
+		tableDesc, updateCols, requestedCols, updateType, fkChecker,
 	)
 	if err != nil {
 		return Updater{}, err
@@ -109,7 +109,6 @@ func makeUpdaterWithoutCascader(
 	requestedCols []sqlbase.ColumnDescriptor,
 	updateType rowUpdaterType,
 	fkChecker *FKChecker,
-	base bool, // is this internal to the cascader or not?
 ) (Updater, error) {
 	updateColIDtoRowIndex := ColIDtoRowIndexFromCols(updateCols)
 
@@ -260,7 +259,7 @@ func makeUpdaterWithoutCascader(
 
 	var err error
 	if ru.Fks, err = fkChecker.addUpdateChecker(
-		tableDesc, ru.FetchColIDtoRowIndex, base,
+		tableDesc, ru.FetchColIDtoRowIndex, ru.primaryKeyColChange,
 	); err != nil {
 		return Updater{}, err
 	}

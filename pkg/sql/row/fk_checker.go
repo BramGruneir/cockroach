@@ -18,28 +18,36 @@ import (
 	"context"
 
 	"github.com/cockroachdb/cockroach/pkg/internal/client"
+	"github.com/cockroachdb/cockroach/pkg/sql/pgwire/pgerror"
 	"github.com/cockroachdb/cockroach/pkg/sql/rowcontainer"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/tree"
 	"github.com/cockroachdb/cockroach/pkg/sql/sqlbase"
 )
 
+type checkerDetails struct {
+	checker      fkExistenceCheckForDelete
+	updateColMap map[sqlbase.ColumnID]int
+	originalRows *rowcontainer.RowContainer
+	updatedRows  *rowcontainer.RowContainer
+}
+
 // FKChecker stores all foreign key checks so they can be executed on a per
 // statement instead of per row basis.
 // TODO(bram): Should this move under fkTables or vice versa?
 type FKChecker struct {
+	deleteChekers 
 	deleteCheckers map[TableID]fkExistenceCheckForDelete
-	deleteColMap   map[sqlbase.ColumnID]int
+	insertColMap   map[TableID]map[sqlbase.ColumnID]int
 	deletedRows    map[TableID]*rowcontainer.RowContainer // Rows that have been deleted by Table ID
 
 	insertCheckers map[TableID]fkExistenceCheckForInsert
-	insertColMap   map[sqlbase.ColumnID]int
+	insertColMap   map[TableID]map[sqlbase.ColumnID]int
 	insertedRows   map[TableID]*rowcontainer.RowContainer // Rows that have been inserted by Table ID
 
-	updateCheckersBase    map[TableID]fkExistenceCheckForUpdate
-	updateCheckersCascade map[TableID]fkExistenceCheckForUpdate
-	updateColMap          map[sqlbase.ColumnID]int
-	originalRows          map[TableID]*rowcontainer.RowContainer // Original values for rows that have been updated by Table ID
-	updatedRows           map[TableID]*rowcontainer.RowContainer // New values for rows that have been updated by Table ID
+	updateCheckers map[TableID]fkExistenceCheckForUpdate
+	updateColMap   map[sqlbase.ColumnID]int
+	originalRows   map[TableID]*rowcontainer.RowContainer // Original values for rows that have been updated by Table ID
+	updatedRows    map[TableID]*rowcontainer.RowContainer // New values for rows that have been updated by Table ID
 
 	txn      *client.Txn
 	fkTables FkTableMetadata
@@ -52,18 +60,17 @@ func MakeFKChecker(
 	txn *client.Txn, evalCtx *tree.EvalContext, fkTables FkTableMetadata, alloc *sqlbase.DatumAlloc,
 ) *FKChecker {
 	return &FKChecker{
-		deleteCheckers:        make(map[TableID]fkExistenceCheckForDelete),
-		deletedRows:           make(map[TableID]*rowcontainer.RowContainer),
-		insertCheckers:        make(map[TableID]fkExistenceCheckForInsert),
-		insertedRows:          make(map[TableID]*rowcontainer.RowContainer),
-		updateCheckersBase:    make(map[TableID]fkExistenceCheckForUpdate),
-		updateCheckersCascade: make(map[TableID]fkExistenceCheckForUpdate),
-		originalRows:          make(map[TableID]*rowcontainer.RowContainer),
-		updatedRows:           make(map[TableID]*rowcontainer.RowContainer),
-		txn:                   txn,
-		fkTables:              fkTables,
-		alloc:                 alloc,
-		evalCtx:               evalCtx,
+		deleteCheckers: make(map[TableID]fkExistenceCheckForDelete),
+		deletedRows:    make(map[TableID]*rowcontainer.RowContainer),
+		insertCheckers: make(map[TableID]fkExistenceCheckForInsert),
+		insertedRows:   make(map[TableID]*rowcontainer.RowContainer),
+		updateCheckers: make(map[TableID]fkExistenceCheckForUpdate),
+		originalRows:   make(map[TableID]*rowcontainer.RowContainer),
+		updatedRows:    make(map[TableID]*rowcontainer.RowContainer),
+		txn:            txn,
+		fkTables:       fkTables,
+		alloc:          alloc,
+		evalCtx:        evalCtx,
 	}
 }
 
@@ -120,15 +127,9 @@ func (fk *FKChecker) addInsertChecker(
 }
 
 func (fk *FKChecker) addUpdateChecker(
-	table *sqlbase.ImmutableTableDescriptor, colMap map[sqlbase.ColumnID]int, base bool,
+	table *sqlbase.ImmutableTableDescriptor, colMap map[sqlbase.ColumnID]int, primaryKeyUpdate bool,
 ) (fkExistenceCheckForUpdate, error) {
-	var updateCheckers map[TableID]fkExistenceCheckForUpdate
-	if base {
-		updateCheckers = fk.updateCheckersBase
-	} else {
-		updateCheckers = fk.updateCheckersCascade
-	}
-	if updateChecker, exists := updateCheckers[table.ID]; exists {
+	if updateChecker, exists := fk.updateCheckers[table.ID]; exists {
 		if !colMapsEqual(fk.updateColMap, colMap) {
 			panic("WHAAA?")
 		}
@@ -140,16 +141,18 @@ func (fk *FKChecker) addUpdateChecker(
 	if err != nil {
 		return fkExistenceCheckForUpdate{}, err
 	}
-	updateCheckers[table.ID] = updateChecker
+	fk.updateCheckers[table.ID] = updateChecker
 	fk.updateColMap = colMap
 	return updateChecker, nil
 }
 
-func (fk *FKChecker) addDeletedRow(
-	ctx context.Context, tableID TableID, colTypeInfo sqlbase.ColTypeInfo, row tree.Datums,
-) error {
+func (fk *FKChecker) addDeletedRow(ctx context.Context, tableID TableID, row tree.Datums) error {
 	deletedRowContainer, exists := fk.deletedRows[tableID]
 	if !exists {
+		colTypeInfo, err := sqlbase.MakeColTypeInfo(table, colIDtoRowIndex)
+		if err != nil {
+			return err
+		}
 		deletedRowContainer = rowcontainer.NewRowContainer(
 			fk.evalCtx.Mon.MakeBoundAccount(), colTypeInfo, 1,
 		)
@@ -199,4 +202,27 @@ func (fk *FKChecker) addUpdatedRow(
 	}
 	_, err := updatedRowContainer.AddRow(ctx, updatedRow)
 	return err
+}
+
+// RunChecks executes all the checks in the checker.
+func (fk *FKChecker) RunChecks(ctx context.Context, traceKV bool) error {
+	for tableID, deletedRows := range fk.deletedRows {
+		if deletedRows.Len() == 0 {
+			continue
+		}
+		deleteChecker, exists := fk.deleteCheckers[tableID]
+		if !exists {
+			return pgerror.NewAssertionErrorf("could not find delete checker for table %d", tableID)
+		}
+		for deletedRows.Len() > 0 {
+			if err := deleteChecker.addAllIdxChecks(ctx, deletedRows.At(0), traceKV); err != nil {
+				return err
+			}
+			if err := deleteChecker.checker.runCheck(ctx, deletedRows.At(0), nil); err != nil {
+				return err
+			}
+			deletedRows.PopFirst()
+		}
+	}
+	return nil
 }

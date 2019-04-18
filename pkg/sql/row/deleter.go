@@ -174,6 +174,9 @@ func (rd *Deleter) DeleteRow(
 		}
 	}
 	if rd.Fks.checker != nil && checkFKs == CheckFKs {
+		if err := rd.FKChecker.addDeletedRow(ctx, rd.Helper.TableDesc.ID, rd.FetchColIDtoRowIndex, values); err != nil {
+			return err
+		}
 		if err := rd.Fks.addAllIdxChecks(ctx, values, traceKV); err != nil {
 			return err
 		}
