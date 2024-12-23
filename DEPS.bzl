@@ -7993,6 +7993,14 @@ def go_deps():
         ],
     )
     go_repository(
+        name = "com_github_ryboe_q",
+        build_file_proto_mode = "disable_global",
+        importpath = "github.com/ryboe/q",
+        # TODO: mirror this repo (to fix, run `./dev generate bazel --mirror`)
+        sum = "h1:sbLQFC3eMDEs8q3g4otbrWExLTHEyKISCFuN7Akropc=",
+        version = "v1.0.21",
+    )
+    go_repository(
         name = "com_github_safchain_ethtool",
         build_file_proto_mode = "disable_global",
         importpath = "github.com/safchain/ethtool",

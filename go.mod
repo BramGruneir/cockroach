@@ -1,6 +1,8 @@
 module github.com/cockroachdb/cockroach
 
-go 1.22.8
+go 1.23.0
+
+toolchain go1.23.4
 
 // golang.org/x/* packages are maintained and curated by the go project, just
 // without the backwards compatibility promises the standard library, and thus
@@ -416,6 +418,7 @@ require (
 	github.com/rogpeppe/go-internal v1.12.0 // indirect
 	github.com/rs/xid v1.3.0 // indirect
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect
+	github.com/ryboe/q v1.0.21 // indirect
 	github.com/sahilm/fuzzy v0.1.0 // indirect
 	github.com/segmentio/asm v1.2.0 // indirect
 	github.com/sirupsen/logrus v1.9.0 // indirect

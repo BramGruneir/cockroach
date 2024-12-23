@@ -22,6 +22,7 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/roachprod/vm"
 	"github.com/cockroachdb/cockroach/pkg/roachprod/vm/gce"
 	"github.com/cockroachdb/errors"
+	"github.com/ryboe/q"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -309,12 +310,17 @@ func ListCloud(l *logger.Logger, options vm.ListOptions) (*Cloud, error) {
 	return cloud, providerErr
 }
 
+type ClusterCreateOptsOverride struct {
+	
+}
+
 type ClusterCreateOpts struct {
 	// Nodes indicates how many nodes in the cluster should be created with the
 	// respective CreateOpts and ProviderOpts.
 	Nodes                 int
 	CreateOpts            vm.CreateOpts
 	ProviderOptsContainer vm.ProviderOptionsContainer
+	Overrides             []ClusterCreateOptsOverride
 }
 
 // CreateCluster TODO(peter): document
@@ -331,6 +337,8 @@ func CreateCluster(l *logger.Logger, opts []*ClusterCreateOpts) error {
 		nodesCreated++
 		return vm.Name(name, nodesCreated)
 	}
+
+	q.Q(opts)
 	for _, o := range opts {
 		providerCount := len(o.CreateOpts.VMProviders)
 		if providerCount == 0 {

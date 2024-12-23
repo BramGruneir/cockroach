@@ -2119,6 +2119,10 @@ github.com/ruudk/golang-pdf417 v0.0.0-20181029194003-1af4ab5afa58/go.mod h1:6lfF
 github.com/ruudk/golang-pdf417 v0.0.0-20201230142125-a7e3863a1245/go.mod h1:pQAZKsJ8yyVxGRWYNEm9oFB8ieLgKFnamEyDmSA0BRk=
 github.com/ryanuber/columnize v0.0.0-20160712163229-9b3edd62028f/go.mod h1:sm1tb6uqfes/u+d4ooFouqFdy9/2g9QGwK3SQygK0Ts=
 github.com/ryanuber/columnize v2.1.0+incompatible/go.mod h1:sm1tb6uqfes/u+d4ooFouqFdy9/2g9QGwK3SQygK0Ts=
+github.com/ryboe/q v1.0.21 h1:sbLQFC3eMDEs8q3g4otbrWExLTHEyKISCFuN7Akropc=
+github.com/ryboe/q v1.0.21/go.mod h1:g4aI/DhdScxW3WLRGxHXgg5ZkGrk+b4h1h5u2PTCvDc=
+github.com/ryboe/q v1.0.23 h1:IZ2ugkpRCkceZ9wds+2y7yF2TrUoVWGGkPVYJfVczeI=
+github.com/ryboe/q v1.0.23/go.mod h1:km7Zxv4Bo5b7ND8WDRrg97XR3pircncCiFJEE9cZidQ=
 github.com/safchain/ethtool v0.0.0-20190326074333-42ed695e3de8/go.mod h1:Z0q5wiBQGYcxhMZ6gUqHn6pYNLypFAvaL3UvgZLR0U4=
 github.com/sahilm/fuzzy v0.1.0 h1:FzWGaw2Opqyu+794ZQ9SYifWv2EIXpwP4q8dY1kDAwI=
 github.com/sahilm/fuzzy v0.1.0/go.mod h1:VFvziUEIMCrT6A6tw2RFIXPXXmzXbOsSHF0DOI8ZK9Y=
